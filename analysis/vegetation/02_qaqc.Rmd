@@ -1,0 +1,89 @@
+---
+title: "Vegetation Data QA/QC"
+date: "`r Sys.Date()`"
+output: html_document
+params:
+  project_id: "PROJECT_ID"
+  region: "Central Alberta"  # used to filter region-appropriate species expectations
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(dplyr)
+library(stringr)
+library(here)
+```
+
+## Load ingested data and reference tables
+
+```{r load}
+veg <- readRDS(here("data-raw", paste0(params$project_id, "_veg_ingested.rds")))
+load(here("data", "wetland_indicator_status.rda"))
+load(here("data", "invasive_species.rda"))
+load(here("data", "anpc_wetland_species.rda"))
+```
+
+## Flag: unrecognised species codes
+
+```{r flag-species}
+known_species <- bind_rows(
+  wetland_indicator_status |> select(species_code),
+  anpc_wetland_species     |> select(species_code)
+) |> distinct()
+
+veg_flag_species <- veg |>
+  anti_join(known_species, by = "species_code") |>
+  mutate(flag = "UNRECOGNISED_SPECIES")
+
+veg_flag_species
+```
+
+## Flag: cover values outside expected range (0–100%)
+
+```{r flag-cover}
+veg_flag_cover <- veg |>
+  filter(!between(cover_pct, 0, 100)) |>
+  mutate(flag = "COVER_OUT_OF_RANGE")
+
+veg_flag_cover
+```
+
+## Flag: unexpected species for region
+
+```{r flag-region}
+# TODO: build region-to-expected-species lookup in reference data
+# Placeholder — cross-reference nrc_geography with known regional flora
+```
+
+## Flag: missing required fields
+
+```{r flag-missing}
+required_fields <- c("plot_id", "species_code", "cover_pct", "stratum")
+
+veg_flag_missing <- veg |>
+  filter(if_any(all_of(required_fields), is.na)) |>
+  mutate(flag = "MISSING_REQUIRED_FIELD")
+
+veg_flag_missing
+```
+
+## QA/QC summary
+
+```{r summary}
+all_flags <- bind_rows(veg_flag_species, veg_flag_cover, veg_flag_missing)
+
+cat("Total records:", nrow(veg), "\n")
+cat("Flagged records:", nrow(all_flags), "\n")
+cat("Flags by type:\n")
+print(table(all_flags$flag))
+```
+
+## Save QA/QC report and clean data
+
+```{r save}
+veg_clean <- veg |>
+  anti_join(all_flags, by = names(veg))   # exclude flagged rows for downstream
+
+saveRDS(veg_clean,  here("data-raw", paste0(params$project_id, "_veg_clean.rds")))
+write.csv(all_flags, here("data-raw",  paste0(params$project_id, "_veg_flags.csv")), row.names = FALSE)
+```

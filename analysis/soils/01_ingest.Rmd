@@ -1,0 +1,44 @@
+---
+title: "Soils Data Ingestion"
+date: "`r Sys.Date()`"
+output: html_document
+params:
+  input_file: "data-raw/soils_field_forms.xlsx"
+  project_id: "PROJECT_ID"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(dplyr)
+library(readxl)
+library(here)
+```
+
+## Load field data
+
+```{r load}
+# Each row = one soil horizon from a pit or probe
+soils_raw <- readxl::read_excel(here(params$input_file), sheet = "Soils")
+glimpse(soils_raw)
+```
+
+## Standardise column names
+
+```{r rename}
+# TODO: map Excel headers to standard fields:
+# plot_id, depth_top_cm, depth_bot_cm, horizon_code, munsell_hue, munsell_value,
+# munsell_chroma, texture, structure, mottles, von_post, material_type, notes
+soils <- soils_raw |> janitor::clean_names()
+```
+
+## Confirm pit inventory
+
+```{r summary}
+soils |> distinct(plot_id) |> arrange(plot_id)
+```
+
+## Save
+
+```{r save}
+saveRDS(soils, here("data-raw", paste0(params$project_id, "_soils_ingested.rds")))
+```

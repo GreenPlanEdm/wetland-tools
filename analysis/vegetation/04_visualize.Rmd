@@ -1,0 +1,109 @@
+---
+title: "Vegetation Visualization"
+date: "`r Sys.Date()`"
+output: html_document
+params:
+  project_id: "PROJECT_ID"
+  output_dir: "reports/figures"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
+                      fig.width = 8, fig.height = 5, dpi = 300)
+library(dplyr)
+library(ggplot2)
+library(here)
+
+dir.create(here(params$output_dir), showWarnings = FALSE, recursive = TRUE)
+```
+
+## Load transformed data
+
+```{r load}
+veg        <- readRDS(here("data-raw", paste0(params$project_id, "_veg_transformed.rds")))
+plot_wi    <- readRDS(here("data-raw", paste0(params$project_id, "_plot_wi.rds")))
+plot_class <- readRDS(here("data-raw", paste0(params$project_id, "_plot_class.rds")))
+```
+
+## UPL–OBL cover proportions per plot
+
+```{r fig-upl-obl}
+wi_palette <- c(OBL = "#1a6e2e", FACW = "#4dac26", FAC = "#b8e186",
+                FACU = "#f1b6da", UPL = "#d01c8b")
+
+p_wi <- veg |>
+  group_by(plot_id, wi_status) |>
+  summarise(cover = sum(cover_pct, na.rm = TRUE), .groups = "drop") |>
+  ggplot(aes(x = plot_id, y = cover, fill = factor(wi_status, levels = names(wi_palette)))) +
+  geom_col(position = "fill") +
+  scale_fill_manual(values = wi_palette, name = "WI Status", na.value = "grey80") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Wetland Indicator Cover by Plot",
+       x = "Plot ID", y = "Proportion of Cover") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p_wi
+ggsave(here(params$output_dir, "fig_upl_obl_by_plot.png"), p_wi, width = 8, height = 5, dpi = 300)
+```
+
+## Native vs invasive species
+
+```{r fig-native-invasive}
+p_inv <- veg |>
+  mutate(species_type = case_when(
+    is_noxious  ~ "Noxious Weed",
+    is_invasive ~ "Invasive",
+    TRUE        ~ "Native / Non-invasive"
+  )) |>
+  group_by(plot_id, species_type) |>
+  summarise(cover = sum(cover_pct, na.rm = TRUE), .groups = "drop") |>
+  ggplot(aes(x = plot_id, y = cover, fill = species_type)) +
+  geom_col(position = "fill") +
+  scale_fill_manual(values = c("Noxious Weed" = "#d73027",
+                               "Invasive"     = "#fc8d59",
+                               "Native / Non-invasive" = "#4575b4"),
+                    name = "Species Type") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Native vs Invasive Cover by Plot",
+       x = "Plot ID", y = "Proportion of Cover") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p_inv
+ggsave(here(params$output_dir, "fig_native_invasive_by_plot.png"), p_inv, width = 8, height = 5, dpi = 300)
+```
+
+## Noxious weed heat map
+
+```{r fig-noxious-heatmap}
+p_heat <- veg |>
+  filter(is_noxious) |>
+  group_by(plot_id, species_code) |>
+  summarise(cover = sum(cover_pct, na.rm = TRUE), .groups = "drop") |>
+  ggplot(aes(x = plot_id, y = species_code, fill = cover)) +
+  geom_tile(colour = "white") +
+  scale_fill_distiller(palette = "YlOrRd", direction = 1, name = "Cover (%)") +
+  labs(title = "Noxious Weed Species Heat Map",
+       x = "Plot ID", y = "Species") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p_heat
+ggsave(here(params$output_dir, "fig_noxious_heatmap.png"), p_heat, width = 8, height = 6, dpi = 300)
+```
+
+## WAIR classification summary
+
+```{r fig-classification}
+p_class <- plot_class |>
+  count(dominant_wi_class) |>
+  ggplot(aes(x = dominant_wi_class, y = n, fill = dominant_wi_class)) +
+  geom_col(show.legend = FALSE) +
+  labs(title = "Plot Classification (WAIR Hydrophytic Vegetation Criterion)",
+       x = "Classification", y = "Number of Plots") +
+  theme_bw()
+
+p_class
+ggsave(here(params$output_dir, "fig_wair_classification.png"), p_class, width = 6, height = 4, dpi = 300)
+```

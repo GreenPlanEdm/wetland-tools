@@ -1,0 +1,78 @@
+---
+title: "Water Permanence Classification"
+date: "`r Sys.Date()`"
+output: html_document
+params:
+  project_id: "PROJECT_ID"
+  water_threshold_ndwi: 0.0   # NDWI threshold for water/not-water classification
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(terra)
+library(sf)
+library(dplyr)
+library(ggplot2)
+library(here)
+```
+
+## Load imagery catalogue
+
+```{r load}
+catalogue <- readRDS(here("data-raw", paste0(params$project_id, "_imagery_catalogue.rds")))
+```
+
+## Classify water pixels per scene (NDWI approach)
+
+```{r classify-water}
+# NDWI = (Green - NIR) / (Green + NIR); values > threshold = water
+# Band assignments will vary by sensor — adjust band numbers below
+
+classify_scene <- function(raster_path, threshold = params$water_threshold_ndwi) {
+  r      <- terra::rast(raster_path)
+  green  <- r[[2]]   # adjust band index to match sensor
+  nir    <- r[[4]]   # adjust band index to match sensor
+  ndwi   <- (green - nir) / (green + nir)
+  water  <- ndwi > threshold
+  names(water) <- "water"
+  water
+}
+
+# TODO: apply classify_scene() across catalogue$path
+# water_masks <- lapply(catalogue$path, classify_scene)
+```
+
+## Aggregate water frequency across time series
+
+```{r water-frequency}
+# Stack all binary water masks and compute proportion of scenes with water present
+# water_stack <- terra::rast(water_masks)
+# water_freq  <- mean(water_stack)   # 0 = never wet; 1 = always wet
+```
+
+## Classify permanence classes
+
+```{r permanence-class}
+# Thresholds below are indicative — refine against ABWRET-A / provincial criteria
+# permanence_class <- classify(water_freq, matrix(c(
+#   0,    0.10, 1,   # Ephemeral
+#   0.10, 0.50, 2,   # Intermittent
+#   0.50, 0.90, 3,   # Seasonal
+#   0.90, 1.00, 4    # Permanent
+# ), ncol = 3, byrow = TRUE))
+```
+
+## Join climate context (antecedent precipitation)
+
+```{r join-climate}
+# TODO: for each imagery scene, extract 30-day antecedent precipitation
+# to flag scenes captured during anomalously wet or dry periods
+```
+
+## Save outputs
+
+```{r save}
+# terra::writeRaster(water_freq,       here("data-raw", paste0(params$project_id, "_water_freq.tif")), overwrite = TRUE)
+# terra::writeRaster(permanence_class, here("data-raw", paste0(params$project_id, "_permanence_class.tif")), overwrite = TRUE)
+message("Water permanence transform complete — uncomment raster operations once input data is available.")
+```

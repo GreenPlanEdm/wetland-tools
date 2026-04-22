@@ -1,0 +1,35 @@
+Package: wetlandtools
+Title: Wetland Field Data Analysis Tools for Alberta
+Version: 0.0.1
+Authors@R:
+    person("Iain", "Sharp", email = "iain@greenplan.ca",
+           role = c("aut", "cre"))
+Description: A collection of tools for ingesting, validating, transforming, and
+    visualizing wetland field data collected in Alberta. Supports vegetation,
+    soils, and water permanence analyses aligned with Alberta-specific regulatory
+    frameworks including ABWRET-A, WAIR, and the ANPC Wetland Classification
+    System. Intended for use in producing technical reports for regulatory
+    submissions.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.1
+Imports:
+    dplyr,
+    tidyr,
+    readxl,
+    openxlsx,
+    stringr,
+    purrr,
+    ggplot2,
+    sf,
+    terra,
+    rmarkdown,
+    knitr,
+    here
+Suggests:
+    testthat (>= 3.0.0),
+    stars,
+    leaflet,
+    plotly
+Config/testthat/edition: 3

@@ -1,0 +1,80 @@
+---
+title: "Soils Data Transformation & Classification"
+date: "`r Sys.Date()`"
+output: html_document
+params:
+  project_id: "PROJECT_ID"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(dplyr)
+library(here)
+```
+
+## Load clean data and reference tables
+
+```{r load}
+soils <- readRDS(here("data-raw", paste0(params$project_id, "_soils_clean.rds")))
+load(here("data", "munsell.rda"))
+load(here("data", "von_post.rda"))
+load(here("data", "cssc_great_groups.rda"))
+```
+
+## Join Munsell colour descriptions
+
+```{r join-munsell}
+soils <- soils |>
+  left_join(munsell |> select(hue, value, chroma, color_name),
+            by = c("munsell_hue" = "hue", "munsell_value" = "value",
+                   "munsell_chroma" = "chroma"))
+```
+
+## Join Von Post humification descriptions
+
+```{r join-vonpost}
+soils <- soils |>
+  left_join(von_post, by = c("von_post" = "von_post_code"))
+```
+
+## Classify peat horizons — retail vs professional grade
+
+```{r classify-peat}
+# Professional peat: Von Post H1–H4 (fibric to hemic)
+# Retail peat:       Von Post H5–H10 (mesic to sapric)
+# Source: industry convention; refine against project-specific criteria
+soils <- soils |>
+  mutate(
+    peat_grade = case_when(
+      material_type == "peat" & von_post %in% paste0("H", 1:4) ~ "Professional",
+      material_type == "peat" & von_post %in% paste0("H", 5:10) ~ "Retail",
+      TRUE ~ NA_character_
+    )
+  )
+```
+
+## Calculate peat thickness per plot
+
+```{r peat-thickness}
+peat_summary <- soils |>
+  filter(material_type == "peat") |>
+  group_by(plot_id, peat_grade) |>
+  summarise(thickness_cm = sum(depth_bot_cm - depth_top_cm, na.rm = TRUE),
+            .groups = "drop")
+
+peat_summary
+```
+
+## Classify plots into CSSC great groups
+
+```{r classify-cssc}
+# TODO: implement CSSC key logic using cssc_great_groups reference table
+# Requires: presence of organic horizon, depth, saturation indicators
+```
+
+## Save
+
+```{r save}
+saveRDS(soils,        here("data-raw", paste0(params$project_id, "_soils_transformed.rds")))
+saveRDS(peat_summary, here("data-raw", paste0(params$project_id, "_peat_summary.rds")))
+```

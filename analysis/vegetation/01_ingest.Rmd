@@ -1,0 +1,55 @@
+---
+title: "Vegetation Data Ingestion"
+date: "`r Sys.Date()`"
+output: html_document
+params:
+  input_file: "data-raw/vegetation_field_forms.xlsx"
+  project_id: "PROJECT_ID"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(dplyr)
+library(readxl)
+library(here)
+```
+
+## Purpose
+
+Read raw vegetation field form data from Excel into a tidy R data frame.
+This Rmd is the entry point for all vegetation analysis — output feeds into `02_qaqc.Rmd`.
+
+## Load field data
+
+```{r load}
+veg_raw <- readxl::read_excel(
+  here(params$input_file),
+  sheet = "Vegetation"
+)
+
+glimpse(veg_raw)
+```
+
+## Standardise column names
+
+```{r rename}
+# TODO: map Excel header names to standard snake_case field names
+# e.g. rename("species_code" = "Sp. Code", "cover_pct" = "Cover %", ...)
+veg <- veg_raw |>
+  janitor::clean_names()
+```
+
+## Confirm plot inventory
+
+```{r plot-summary}
+veg |>
+  distinct(plot_id) |>
+  arrange(plot_id)
+```
+
+## Save interim output
+
+```{r save}
+saveRDS(veg, here("data-raw", paste0(params$project_id, "_veg_ingested.rds")))
+message("Saved: ", nrow(veg), " rows across ", n_distinct(veg$plot_id), " plots.")
+```

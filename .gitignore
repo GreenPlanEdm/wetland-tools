@@ -47,3 +47,23 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Rendered output — generate locally, don't commit
+*.html
+*.pdf
+*_files/
+analysis/**/*_files/
+
+# Raw client field data — never commit
+data-raw/*.xlsx
+data-raw/*.xls
+data-raw/*.csv
+!data-raw/build_reference_data.R
+
+# Large spatial/raster/LiDAR files
+*.tif
+*.tiff
+*.img
+*.las
+*.laz
+*.gdb

@@ -1,0 +1,77 @@
+---
+title: "Soils Data QA/QC"
+date: "`r Sys.Date()`"
+output: html_document
+params:
+  project_id: "PROJECT_ID"
+  region: "Central Alberta"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(dplyr)
+library(here)
+```
+
+## Load data and reference tables
+
+```{r load}
+soils <- readRDS(here("data-raw", paste0(params$project_id, "_soils_ingested.rds")))
+load(here("data", "munsell.rda"))
+load(here("data", "von_post.rda"))
+load(here("data", "agrasid.rda"))
+```
+
+## Flag: invalid Munsell codes
+
+```{r flag-munsell}
+valid_munsell <- munsell |> select(hue, value, chroma) |> distinct()
+
+flag_munsell <- soils |>
+  anti_join(valid_munsell,
+            by = c("munsell_hue" = "hue", "munsell_value" = "value",
+                   "munsell_chroma" = "chroma")) |>
+  mutate(flag = "INVALID_MUNSELL")
+
+flag_munsell
+```
+
+## Flag: overlapping or inverted horizon depths
+
+```{r flag-depths}
+flag_depths <- soils |>
+  filter(depth_top_cm >= depth_bot_cm) |>
+  mutate(flag = "INVERTED_HORIZON_DEPTH")
+
+flag_depths
+```
+
+## Flag: Von Post values outside H1–H10
+
+```{r flag-vonpost}
+valid_vp <- von_post |> pull(von_post_code)
+
+flag_vp <- soils |>
+  filter(!is.na(von_post), !von_post %in% valid_vp) |>
+  mutate(flag = "INVALID_VON_POST")
+
+flag_vp
+```
+
+## Flag: unexpected stratigraphy for region
+
+```{r flag-strat}
+# TODO: cross-reference AGRASID expected great groups for this region/NTS mapsheet
+```
+
+## Summary and save
+
+```{r save}
+all_flags <- bind_rows(flag_munsell, flag_depths, flag_vp)
+cat("Flagged:", nrow(all_flags), "of", nrow(soils), "horizon records\n")
+print(table(all_flags$flag))
+
+soils_clean <- soils |> anti_join(all_flags, by = names(soils))
+saveRDS(soils_clean, here("data-raw", paste0(params$project_id, "_soils_clean.rds")))
+write.csv(all_flags,  here("data-raw", paste0(params$project_id, "_soils_flags.csv")), row.names = FALSE)
+```

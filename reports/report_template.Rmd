@@ -1,0 +1,84 @@
+---
+title: "Wetland Assessment Report"
+subtitle: "`r params$project_name`"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  word_document:
+    reference_docx: "report_style.docx"
+  html_document:
+    toc: true
+    toc_float: true
+params:
+  project_id:   "PROJECT_ID"
+  project_name: "Project Name"
+  client:       "Client Name"
+  prepared_by:  "Green Plan Ltd."
+  figure_dir:   "reports/figures"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(dplyr)
+library(knitr)
+library(here)
+```
+
+# 1. Introduction
+
+*[Insert project background and regulatory context here.]*
+
+# 2. Methods
+
+## 2.1 Vegetation Assessment
+
+Field vegetation data were collected using standard plot-based methodology and classified
+according to the Wetland Assessment and Impact Rating (WAIR) framework and the Alberta
+Native Plant Council (ANPC) Wetland Plant Communities classification system.
+
+## 2.2 Soils Assessment
+
+Soil profiles were described and classified following the Canadian System of Soil
+Classification (CSSC). Peat layers were characterized using the Von Post humification scale.
+
+## 2.3 Water Permanence
+
+Historical water permanence was assessed from multi-date satellite imagery using NDWI
+pixel classification, supplemented by LiDAR-derived topographic analysis.
+
+# 3. Results
+
+## 3.1 Vegetation
+
+```{r fig-upl-obl, fig.cap="Figure 1. Wetland indicator cover by plot."}
+knitr::include_graphics(here(params$figure_dir, "fig_upl_obl_by_plot.png"))
+```
+
+```{r fig-invasive, fig.cap="Figure 2. Native vs invasive cover by plot."}
+knitr::include_graphics(here(params$figure_dir, "fig_native_invasive_by_plot.png"))
+```
+
+```{r fig-noxious, fig.cap="Figure 3. Noxious weed species heat map."}
+knitr::include_graphics(here(params$figure_dir, "fig_noxious_heatmap.png"))
+```
+
+## 3.2 Soils
+
+```{r fig-peat, fig.cap="Figure 4. Peat profiles by Von Post humification."}
+knitr::include_graphics(here(params$figure_dir, "fig_peat_vonpost.png"))
+```
+
+## 3.3 Water Permanence
+
+*[Insert water permanence figures and interpretation here.]*
+
+# 4. Wetland Classification
+
+*[Insert classification table and narrative.]*
+
+# 5. Conclusions
+
+*[Insert regulatory conclusions.]*
+
+---
+
+*Report prepared by `r params$prepared_by` for `r params$client`.*

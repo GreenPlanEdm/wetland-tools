@@ -1,0 +1,108 @@
+---
+title: "Soils Visualization"
+date: "`r Sys.Date()`"
+output: html_document
+params:
+  project_id: "PROJECT_ID"
+  output_dir: "reports/figures"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
+                      fig.width = 7, fig.height = 6, dpi = 300)
+library(dplyr)
+library(ggplot2)
+library(here)
+
+dir.create(here(params$output_dir), showWarnings = FALSE, recursive = TRUE)
+```
+
+## Load transformed data
+
+```{r load}
+soils       <- readRDS(here("data-raw", paste0(params$project_id, "_soils_transformed.rds")))
+peat_smry   <- readRDS(here("data-raw", paste0(params$project_id, "_peat_summary.rds")))
+```
+
+## Soil profile plots — horizon depth, colour, and material
+
+```{r fig-profiles, fig.height=8}
+profile_plot <- function(pit_data) {
+  ggplot(pit_data,
+         aes(xmin = 0, xmax = 1,
+             ymin = -depth_bot_cm, ymax = -depth_top_cm,
+             fill = color_name)) +
+    geom_rect(colour = "grey40") +
+    geom_text(aes(x = 0.5, y = -(depth_top_cm + depth_bot_cm) / 2,
+                  label = paste0(horizon_code, "\n", texture)),
+              size = 3) +
+    scale_fill_identity() +
+    scale_y_continuous(breaks = seq(0, -200, by = -10),
+                       labels = abs(seq(0, -200, by = -10))) +
+    labs(x = NULL, y = "Depth (cm)",
+         title = paste("Soil Profile —", unique(pit_data$plot_id))) +
+    theme_bw() +
+    theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+}
+
+# Generate one profile per plot
+plots <- soils |>
+  group_by(plot_id) |>
+  group_map(~ profile_plot(.x), .keep = TRUE)
+
+for (p in plots) print(p)
+```
+
+## Peat profiles by Von Post humification
+
+```{r fig-peat-vonpost}
+p_vp <- soils |>
+  filter(material_type == "peat") |>
+  ggplot(aes(x = plot_id,
+             ymin = -depth_bot_cm, ymax = -depth_top_cm,
+             fill = von_post)) +
+  geom_linerange(size = 8) +
+  scale_fill_brewer(palette = "YlOrBr", name = "Von Post") +
+  scale_y_continuous(labels = ~ abs(.)) +
+  labs(title = "Peat Profiles by Von Post Humification",
+       x = "Plot ID", y = "Depth (cm)") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p_vp
+ggsave(here(params$output_dir, "fig_peat_vonpost.png"), p_vp, width = 8, height = 5, dpi = 300)
+```
+
+## Peat isopach — professional grade
+
+```{r fig-isopach-professional}
+# TODO: requires spatial coordinates per plot_id; generate interpolated isopach
+# using terra::interpIDW or kriging once plot coordinates are joined
+p_pro <- peat_smry |>
+  filter(peat_grade == "Professional") |>
+  ggplot(aes(x = reorder(plot_id, -thickness_cm), y = thickness_cm)) +
+  geom_col(fill = "#8c510a") +
+  labs(title = "Professional Peat Thickness by Plot",
+       x = "Plot ID", y = "Thickness (cm)") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p_pro
+ggsave(here(params$output_dir, "fig_peat_professional.png"), p_pro, width = 8, height = 5, dpi = 300)
+```
+
+## Peat isopach — retail grade
+
+```{r fig-isopach-retail}
+p_ret <- peat_smry |>
+  filter(peat_grade == "Retail") |>
+  ggplot(aes(x = reorder(plot_id, -thickness_cm), y = thickness_cm)) +
+  geom_col(fill = "#bf812d") +
+  labs(title = "Retail Peat Thickness by Plot",
+       x = "Plot ID", y = "Thickness (cm)") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p_ret
+ggsave(here(params$output_dir, "fig_peat_retail.png"), p_ret, width = 8, height = 5, dpi = 300)
+```

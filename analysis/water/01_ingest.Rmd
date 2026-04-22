@@ -1,0 +1,66 @@
+---
+title: "Water Permanence Data Ingestion"
+date: "`r Sys.Date()`"
+output: html_document
+params:
+  project_id: "PROJECT_ID"
+  imagery_dir: "data-raw/imagery"
+  lidar_dir:   "data-raw/lidar"
+  climate_dir: "data-raw/climate"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(terra)
+library(sf)
+library(dplyr)
+library(here)
+```
+
+## Notes on data types
+
+This tool handles two structurally different data types:
+
+- **Discrete (snapshot):** Satellite/aerial imagery scenes — each is one moment in time.
+  Water presence is classified per-pixel per-scene.
+- **Continuous:** Climate data (precipitation, temperature) — time series that must be
+  aggregated to match imagery acquisition dates before comparison.
+
+These are kept separate through ingestion and only joined at the analysis stage.
+
+## Imagery — catalogue available scenes
+
+```{r imagery-catalogue}
+# List all raster scenes in the imagery directory
+img_files <- list.files(here(params$imagery_dir), pattern = "\\.tif$",
+                        full.names = TRUE, recursive = TRUE)
+
+img_catalogue <- data.frame(
+  path       = img_files,
+  filename   = basename(img_files),
+  # TODO: parse acquisition date from filename convention (YYYYMMDD expected)
+  acq_date   = as.Date(NA)
+)
+
+img_catalogue
+```
+
+## LiDAR — load DEM / DTM
+
+```{r lidar-load}
+# TODO: load and mosaic LiDAR tiles; derive flow accumulation and depression rasters
+# dem <- terra::rast(list.files(here(params$lidar_dir), pattern="\\.tif$", full.names=TRUE))
+```
+
+## Climate — load precipitation/temperature time series
+
+```{r climate-load}
+# TODO: load climate CSV (ECCC station or gridded product) and parse date column
+# climate_raw <- read.csv(here(params$climate_dir, "climate.csv"))
+```
+
+## Save catalogue
+
+```{r save}
+saveRDS(img_catalogue, here("data-raw", paste0(params$project_id, "_imagery_catalogue.rds")))
+```

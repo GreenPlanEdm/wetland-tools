@@ -1,0 +1,99 @@
+---
+title: "Vegetation Data Transformation & Classification"
+date: "`r Sys.Date()`"
+output: html_document
+params:
+  project_id: "PROJECT_ID"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(dplyr)
+library(tidyr)
+library(here)
+```
+
+## Load clean data and reference tables
+
+```{r load}
+veg <- readRDS(here("data-raw", paste0(params$project_id, "_veg_clean.rds")))
+load(here("data", "wetland_indicator_status.rda"))
+load(here("data", "anpc_wetland_species.rda"))
+load(here("data", "invasive_species.rda"))
+load(here("data", "noxious_weeds.rda"))
+load(here("data", "wair_rules.rda"))
+load(here("data", "ecosites_nfc.rda"))
+```
+
+## Join wetland indicator status (UPL–OBL)
+
+```{r join-wi-status}
+veg <- veg |>
+  left_join(wetland_indicator_status |> select(species_code, wi_status, wi_status_label),
+            by = "species_code")
+```
+
+## Join invasive / noxious flags
+
+```{r join-invasive}
+veg <- veg |>
+  left_join(invasive_species |> select(species_code, is_invasive = invasive),
+            by = "species_code") |>
+  left_join(noxious_weeds   |> select(species_code, is_noxious  = noxious),
+            by = "species_code") |>
+  mutate(
+    is_invasive = replace_na(is_invasive, FALSE),
+    is_noxious  = replace_na(is_noxious,  FALSE)
+  )
+```
+
+## Calculate UPL–OBL proportions per plot (WAIR methodology)
+
+```{r upl-obl}
+# Weighted by % cover; OBL + FACW + FAC grouped as wetland indicators
+wi_order <- c("OBL", "FACW", "FAC", "FACU", "UPL")
+
+plot_wi <- veg |>
+  group_by(plot_id) |>
+  summarise(
+    total_cover         = sum(cover_pct, na.rm = TRUE),
+    obl_facw_fac_cover  = sum(cover_pct[wi_status %in% c("OBL","FACW","FAC")], na.rm = TRUE),
+    obl_cover           = sum(cover_pct[wi_status == "OBL"], na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    pct_wetland_indicator = obl_facw_fac_cover / total_cover,
+    dominant_wi_class     = case_when(
+      pct_wetland_indicator >= 0.50 ~ "Hydrophytic",
+      pct_wetland_indicator >= 0.33 ~ "Marginal",
+      TRUE                          ~ "Non-hydrophytic"
+    )
+  )
+
+plot_wi
+```
+
+## Classify plots into ANPC wetland class (WAIR rules)
+
+```{r classify}
+# TODO: implement WAIR decision tree using wair_rules reference table
+# Placeholder structure:
+plot_classification <- plot_wi |>
+  mutate(
+    wetland_class = NA_character_  # to be populated from wair_rules
+  )
+```
+
+## Classify plots into NFC ecosites
+
+```{r ecosite}
+# TODO: cross-reference dominant species assemblage with ecosites_nfc
+```
+
+## Save transformed data
+
+```{r save}
+saveRDS(veg,                 here("data-raw", paste0(params$project_id, "_veg_transformed.rds")))
+saveRDS(plot_wi,             here("data-raw", paste0(params$project_id, "_plot_wi.rds")))
+saveRDS(plot_classification, here("data-raw", paste0(params$project_id, "_plot_class.rds")))
+```
