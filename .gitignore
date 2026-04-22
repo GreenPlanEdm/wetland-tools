@@ -54,6 +54,9 @@ rsconnect/
 *_files/
 analysis/**/*_files/
 
+# Keep fillable PDF templates in version control
+!inst/templates/*.pdf
+
 # Raw client field data — never commit
 data-raw/*.xlsx
 data-raw/*.xls
