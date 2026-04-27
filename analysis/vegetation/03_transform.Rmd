@@ -4,14 +4,24 @@ date: "`r Sys.Date()`"
 output: html_document
 params:
   project_id: "PROJECT_ID"
-  region: "WMVC"
-  # Region for wetland indicator status lookup.
-  # Choices: "WMVC" (Western Mountains & Valleys – Cascades),
-  #          "GP"   (Great Plains),
-  #          "NCNE" (North Central & Northeast),
-  #          "AK"   (Alaska)
-  # Most Alberta projects use WMVC (mountains/foothills) or GP (parkland/prairies).
-  # When uncertain, use WMVC — it is the most conservative (fewest FAC+ assignments).
+  region_priority: "WMVC, GP"
+  # Ordered list of regions for wetland indicator status, separated by commas.
+  # The first region that has a status for a given species is used; the next
+  # region in the list acts as the fallback, and so on. Species with no status
+  # in any listed region receive NA and are excluded from the dominance test
+  # without crashing the script.
+  #
+  # Valid regions:
+  #   WMVC  — Western Mountains & Valleys / Cascades
+  #   GP    — Great Plains
+  #   NCNE  — North Central & Northeast
+  #   AK    — Alaska
+  #
+  # Guidance for Alberta projects:
+  #   Mountains / foothills  → "WMVC, GP"
+  #   Parkland / prairies    → "GP, WMVC"
+  #   Boreal / Peace region  → "NCNE, GP"
+  #   Use all four as safety net → "WMVC, GP, NCNE, AK"
 ---
 
 ```{r setup, include=FALSE}
@@ -44,29 +54,59 @@ ab_plant_list <- read.csv(
 )
 ```
 
-## Select regional indicator status column
+## Build regional indicator status lookup (priority order)
 
 ```{r region}
-region_col <- params$region
+valid_regions <- c("WMVC", "GP", "NCNE", "AK")
+region_order  <- trimws(strsplit(params$region_priority, ",")[[1]])
 
-stopifnot(
-  "`region` must be one of: WMVC, GP, NCNE, AK" =
-    region_col %in% c("WMVC", "GP", "NCNE", "AK")
-)
+invalid <- setdiff(region_order, valid_regions)
+if (length(invalid) > 0)
+  stop("Invalid region(s): ", paste(invalid, collapse = ", "),
+       ". Must be from: ", paste(valid_regions, collapse = ", "))
 
-message("Using regional indicator column: ", region_col)
+message("Region priority: ", paste(region_order, collapse = " -> "))
 
-# Build a lookup: scientific name → wi_status for the selected region
+# For each species, pick the first non-empty status in priority order.
+# wi_region_used records which column was actually used so results are auditable.
+# Species with no status in any listed region get NA and are excluded from the
+# dominance test without causing an error.
 wi_lookup <- ab_plant_list |>
-  select(scientific_name = `Scientific Name (ACIMS)`,
-         wi_status        = all_of(region_col)) |>
-  filter(!is.na(wi_status), wi_status != "NI") |>
-  mutate(wi_status = toupper(trimws(wi_status)))
+  select(
+    scientific_name = `Scientific Name (ACIMS)`,
+    all_of(region_order)
+  ) |>
+  mutate(across(all_of(region_order), \(x) {
+    x <- toupper(trimws(x))
+    ifelse(x == "" | x == "NI", NA_character_, x)
+  })) |>
+  mutate(
+    wi_status = coalesce(!!!syms(region_order)),
+    wi_region_used = {
+      m <- pick(all_of(region_order))
+      apply(m, 1, \(row) {
+        idx <- which(!is.na(row))[1]
+        if (is.na(idx)) NA_character_ else region_order[idx]
+      })
+    }
+  ) |>
+  select(scientific_name, wi_status, wi_region_used) |>
+  filter(!is.na(wi_status))
+
+message(
+  "Indicator status assigned to ", nrow(wi_lookup), " species. ",
+  "Coverage by region: ",
+  paste(
+    sapply(region_order, \(r) paste0(r, "=", sum(wi_lookup$wi_region_used == r, na.rm = TRUE))),
+    collapse = ", "
+  )
+)
 ```
 
 ## Join wetland indicator status to vegetation data
 
 ```{r join-wi-status}
+# wi_region_used column shows which region's status was applied per species
 veg <- veg |>
   left_join(wi_lookup, by = "scientific_name")
 ```
@@ -135,7 +175,7 @@ plot_wi <- veg |>
   mutate(
     pct_dominant_hydrophyte = n_dominant_hydrophyte / n_dominant,
     vegetation_criterion    = pct_dominant_hydrophyte >= 0.50,
-    region_used             = region_col
+    region_priority         = paste(region_order, collapse = " > ")
   )
 
 plot_wi
