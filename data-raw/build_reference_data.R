@@ -24,6 +24,15 @@ usethis::use_data(noxious_weeds, overwrite = TRUE)
 anpc_wetland_species <- read.csv(here("data-raw", "anpc_wetland_species.csv"))
 usethis::use_data(anpc_wetland_species, overwrite = TRUE)
 
+# Alberta Wetland Classification System — full provincial plant list with class
+# and indicator assignments derived from AWCS 2015 (ESRD Water Policy Branch).
+# 622 species; 107 flagged as AWCS text indicators with fen type, bog form,
+# marsh zone/salinity/hydroperiod, and swamp form detail columns.
+# Source: ESRD 2015 Appendix C + classification text; ITIS 2014 taxonomy
+awcs_wetland_species <- read.csv(here("data-raw", "awcs_wetland_species.csv"),
+                                  stringsAsFactors = FALSE)
+usethis::use_data(awcs_wetland_species, overwrite = TRUE)
+
 # USDA PLANTS / NatureServe wetland indicator status (UPL–OBL)
 # Source: USDA PLANTS Database; adapted for AB / NRC geography
 wetland_indicator_status <- read.csv(here("data-raw", "wetland_indicator_status.csv"))
