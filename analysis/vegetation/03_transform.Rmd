@@ -4,6 +4,14 @@ date: "`r Sys.Date()`"
 output: html_document
 params:
   project_id: "PROJECT_ID"
+  region: "WMVC"
+  # Region for wetland indicator status lookup.
+  # Choices: "WMVC" (Western Mountains & Valleys – Cascades),
+  #          "GP"   (Great Plains),
+  #          "NCNE" (North Central & Northeast),
+  #          "AK"   (Alaska)
+  # Most Alberta projects use WMVC (mountains/foothills) or GP (parkland/prairies).
+  # When uncertain, use WMVC — it is the most conservative (fewest FAC+ assignments).
 ---
 
 ```{r setup, include=FALSE}
@@ -17,77 +25,142 @@ library(here)
 
 ```{r load}
 veg <- readRDS(here("data-raw", paste0(params$project_id, "_veg_clean.rds")))
-load(here("data", "wetland_indicator_status.rda"))
+
+load(here("data", "awcs_wetland_species.rda"))
 load(here("data", "anpc_wetland_species.rda"))
 load(here("data", "invasive_species.rda"))
 load(here("data", "noxious_weeds.rda"))
 load(here("data", "wair_rules.rda"))
 load(here("data", "ecosites_nfc.rda"))
+
+# Alberta Wetland Plant List 2021 — regional wetland indicator status
+# Row 1 is a merged title; skip it so row 2 becomes the header.
+# Columns: "Scientific Name (ACIMS)", "Common Name (ACIMS)", WMVC, GP, NCNE, AK
+ab_plant_list <- read.csv(
+  here("data-raw", "ABWetlandPlantList_2021.csv"),
+  skip        = 1,
+  check.names = FALSE,
+  stringsAsFactors = FALSE
+)
 ```
 
-## Join wetland indicator status (UPL–OBL)
+## Select regional indicator status column
+
+```{r region}
+region_col <- params$region
+
+stopifnot(
+  "`region` must be one of: WMVC, GP, NCNE, AK" =
+    region_col %in% c("WMVC", "GP", "NCNE", "AK")
+)
+
+message("Using regional indicator column: ", region_col)
+
+# Build a lookup: scientific name → wi_status for the selected region
+wi_lookup <- ab_plant_list |>
+  select(scientific_name = `Scientific Name (ACIMS)`,
+         wi_status        = all_of(region_col)) |>
+  filter(!is.na(wi_status), wi_status != "NI") |>
+  mutate(wi_status = toupper(trimws(wi_status)))
+```
+
+## Join wetland indicator status to vegetation data
 
 ```{r join-wi-status}
 veg <- veg |>
-  left_join(wetland_indicator_status |> select(species_code, wi_status, wi_status_label),
-            by = "species_code")
+  left_join(wi_lookup, by = "scientific_name")
 ```
 
-## Join invasive / noxious flags
+## Flag noxious weeds and invasive species
 
-```{r join-invasive}
+```{r join-flags}
 veg <- veg |>
-  left_join(invasive_species |> select(species_code, is_invasive = invasive),
-            by = "species_code") |>
-  left_join(noxious_weeds   |> select(species_code, is_noxious  = noxious),
-            by = "species_code") |>
+  left_join(
+    noxious_weeds |> select(scientific_name, weed_class, control_requirement, wca_schedule),
+    by = "scientific_name"
+  ) |>
+  left_join(
+    invasive_species |> select(scientific_name, is_invasive = invasive),
+    by = "scientific_name"
+  ) |>
   mutate(
-    is_invasive = replace_na(is_invasive, FALSE),
-    is_noxious  = replace_na(is_noxious,  FALSE)
+    is_noxious  = !is.na(weed_class),
+    is_invasive = replace_na(is_invasive, FALSE)
   )
 ```
 
-## Calculate UPL–OBL proportions per plot (WAIR methodology)
+## Join AWCS wetland class assignments
 
-```{r upl-obl}
-# Weighted by % cover; OBL + FACW + FAC grouped as wetland indicators
-wi_order <- c("OBL", "FACW", "FAC", "FACU", "UPL")
+```{r join-awcs}
+veg <- veg |>
+  left_join(
+    awcs_wetland_species |> select(
+      scientific_name,
+      awcs_indicator,
+      indicator_strength,
+      class_bog, class_fen, class_swamp, class_marsh, class_shallow_open_water
+    ),
+    by = "scientific_name"
+  )
+```
+
+## WIDD Dominance Test (per plot)
+
+The Alberta Wetland Identification and Delineation Directive defines hydrophytic
+vegetation as follows: sort species by cover descending, accumulate until ≥ 50 % of
+total plot cover is reached — those are the dominants. If ≥ 50 % of dominant species
+have an indicator status of OBL, FACW, or FAC, the vegetation criterion is met.
+
+```{r widd-dominance}
+hydrophytic_statuses <- c("OBL", "FACW", "FAC")
 
 plot_wi <- veg |>
   group_by(plot_id) |>
+  arrange(desc(cover_pct), .by_group = TRUE) |>
+  mutate(
+    cumulative_cover = cumsum(cover_pct),
+    total_cover      = sum(cover_pct, na.rm = TRUE),
+    # A species is dominant if it falls within the 50 % accumulation threshold.
+    # Include the species that pushes cumulative cover past 50 % (≥, not >).
+    is_dominant = cumulative_cover - cover_pct < total_cover * 0.50
+  ) |>
   summarise(
-    total_cover         = sum(cover_pct, na.rm = TRUE),
-    obl_facw_fac_cover  = sum(cover_pct[wi_status %in% c("OBL","FACW","FAC")], na.rm = TRUE),
-    obl_cover           = sum(cover_pct[wi_status == "OBL"], na.rm = TRUE),
+    total_cover           = first(total_cover),
+    n_dominant            = sum(is_dominant, na.rm = TRUE),
+    n_dominant_hydrophyte = sum(is_dominant & wi_status %in% hydrophytic_statuses,
+                                na.rm = TRUE),
+    dominant_species      = paste(scientific_name[is_dominant], collapse = "; "),
     .groups = "drop"
   ) |>
   mutate(
-    pct_wetland_indicator = obl_facw_fac_cover / total_cover,
-    dominant_wi_class     = case_when(
-      pct_wetland_indicator >= 0.50 ~ "Hydrophytic",
-      pct_wetland_indicator >= 0.33 ~ "Marginal",
-      TRUE                          ~ "Non-hydrophytic"
-    )
+    pct_dominant_hydrophyte = n_dominant_hydrophyte / n_dominant,
+    vegetation_criterion    = pct_dominant_hydrophyte >= 0.50,
+    region_used             = region_col
   )
 
 plot_wi
+```
+
+## Summary of weed detections per plot
+
+```{r weed-summary}
+weed_detections <- veg |>
+  filter(is_noxious | is_invasive) |>
+  select(plot_id, scientific_name, common_name, cover_pct,
+         weed_class, control_requirement, is_invasive) |>
+  arrange(plot_id, weed_class, scientific_name)
+
+weed_detections
 ```
 
 ## Classify plots into ANPC wetland class (WAIR rules)
 
 ```{r classify}
 # TODO: implement WAIR decision tree using wair_rules reference table
-# Placeholder structure:
 plot_classification <- plot_wi |>
   mutate(
     wetland_class = NA_character_  # to be populated from wair_rules
   )
-```
-
-## Classify plots into NFC ecosites
-
-```{r ecosite}
-# TODO: cross-reference dominant species assemblage with ecosites_nfc
 ```
 
 ## Save transformed data
@@ -96,4 +169,5 @@ plot_classification <- plot_wi |>
 saveRDS(veg,                 here("data-raw", paste0(params$project_id, "_veg_transformed.rds")))
 saveRDS(plot_wi,             here("data-raw", paste0(params$project_id, "_plot_wi.rds")))
 saveRDS(plot_classification, here("data-raw", paste0(params$project_id, "_plot_class.rds")))
+saveRDS(weed_detections,     here("data-raw", paste0(params$project_id, "_weed_detections.rds")))
 ```

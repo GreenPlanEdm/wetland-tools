@@ -65,6 +65,7 @@ data-raw/*.csv
 # Shared reference tables — safe to commit
 !data-raw/cssc_great_groups.csv
 !data-raw/awcs_wetland_species.csv
+!data-raw/noxious_weeds_ab.csv
 
 # Large spatial/raster/LiDAR files
 *.tif
