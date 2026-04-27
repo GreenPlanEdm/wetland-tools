@@ -62,6 +62,8 @@ data-raw/*.xlsx
 data-raw/*.xls
 data-raw/*.csv
 !data-raw/build_reference_data.R
+# Shared reference tables — safe to commit
+!data-raw/cssc_great_groups.csv
 
 # Large spatial/raster/LiDAR files
 *.tif
