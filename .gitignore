@@ -67,6 +67,13 @@ data-raw/*.csv
 !data-raw/awcs_wetland_species.csv
 !data-raw/noxious_weeds_ab.csv
 
+# IDE and editor directories
+.idea/
+__pycache__/
+
+# Claude Code local settings
+.claude/settings.local.json
+
 # Large spatial/raster/LiDAR files
 *.tif
 *.tiff
