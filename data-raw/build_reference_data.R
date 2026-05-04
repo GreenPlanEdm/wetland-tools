@@ -76,17 +76,33 @@ generate_spp_codes <- function(sci_names) {
 
 # AB Invasive Species Council species list
 # Source: https://abinvasives.ca/
-invasive_species <- read.csv(here("data-raw", "invasive_species_ab.csv"))
-usethis::use_data(invasive_species, overwrite = TRUE)
+# TODO (Track 2): obtain invasive_species_ab.csv and uncomment
+# invasive_species <- read.csv(here("data-raw", "invasive_species_ab.csv"))
+# usethis::use_data(invasive_species, overwrite = TRUE)
 
 # AB Weed Control Act — Noxious and Nuisance weeds
 # Source: AB King's Printer / AEP
 noxious_weeds <- read.csv(here("data-raw", "noxious_weeds_ab.csv"))
 usethis::use_data(noxious_weeds, overwrite = TRUE)
 
-# ANPC Wetland Classification System — indicator species and wetland classes
-# Source: ANPC Wetland Plant Communities of Alberta field guide
-anpc_wetland_species <- read.csv(here("data-raw", "anpc_wetland_species.csv"))
+# ACIMS Alberta vascular plant list (used as species validation lookup in QA/QC)
+# Note: source file is the full ACIMS provincial plant list, not an ANPC wetland
+# communities list. It serves the downstream purpose of validating species codes.
+# Has 9 leading blank columns from original Excel export — skipped by column selection.
+# Source: ACIMS / Alberta Biodiversity Monitoring Institute
+anpc_raw <- read.csv(here("data-raw", "ANPC_Native_Plant_List.csv"),
+                     stringsAsFactors = FALSE, encoding = "latin1")
+# check.names = TRUE (default): "Scientific Name" → "Scientific.Name", etc.
+# Duplicate "ORIGIN" column → "ORIGIN" and "ORIGIN.1"; we take the first.
+anpc_wetland_species <- anpc_raw |>
+  select(
+    scientific_name = Scientific.Name,
+    common_name     = Common.Name,
+    origin          = ORIGIN,
+    s_rank          = S_RANK
+  ) |>
+  filter(nzchar(trimws(scientific_name))) |>
+  mutate(species_code = generate_spp_codes(scientific_name))
 usethis::use_data(anpc_wetland_species, overwrite = TRUE)
 
 # Alberta Wetland Classification System — full provincial plant list with class
@@ -103,32 +119,64 @@ awcs_wetland_species <- read.csv(here("data-raw", "awcs_wetland_species.csv"),
 usethis::use_data(awcs_wetland_species, overwrite = TRUE)
 
 # USDA PLANTS / NatureServe wetland indicator status (UPL–OBL)
-# Source: USDA PLANTS Database; adapted for AB / NRC geography
-wetland_indicator_status <- read.csv(here("data-raw", "wetland_indicator_status.csv"))
+# Source: Alberta Wetland Plant List 2021 (adapted from US Army Corps of Engineers
+# regional lists for WMVC, GP, NCNE, AK regions).
+# Row 1 is a merged title row; skip=1 makes row 2 the header.
+wi_raw <- read.csv(here("data-raw", "ABWetlandPlantList_2021.csv"),
+                   skip = 1, check.names = FALSE, stringsAsFactors = FALSE,
+                   encoding = "latin1")
+wetland_indicator_status <- wi_raw |>
+  select(
+    scientific_name = `Scientific Name (ACIMS)`,
+    common_name     = `Common Name (ACIMS)`,
+    wmvc = WMVC,
+    gp   = GP,
+    ncne = NCNE,
+    ak   = AK
+  ) |>
+  filter(nzchar(trimws(scientific_name))) |>
+  mutate(species_code = generate_spp_codes(scientific_name))
 usethis::use_data(wetland_indicator_status, overwrite = TRUE)
 
 # AB Rangeland Plants
-# Source: AEP Rangeland Plants of Alberta
-rangeland_plants <- read.csv(here("data-raw", "rangeland_plants_ab.csv"))
+# Source: AEP Rangeland Plants of Alberta (2023 edition)
+rangeland_plants <- read.csv(here("data-raw", "RangePlants_2023.csv"),
+                              stringsAsFactors = FALSE) |>
+  rename(
+    common_name      = Common.name,
+    scientific_name  = Scientific.name,
+    life_span        = Life.span,
+    origin           = Origin,
+    grazing_response = Grazing.response,
+    forage_value     = Forage.value,
+    stratum          = Stratum
+  )
 usethis::use_data(rangeland_plants, overwrite = TRUE)
 
 # Plant salinity tolerance
 # Source: literature compilation
-salinity_tolerance <- read.csv(here("data-raw", "salinity_tolerance.csv"))
-usethis::use_data(salinity_tolerance, overwrite = TRUE)
+# TODO (Track 2): obtain salinity_tolerance.csv and uncomment
+# salinity_tolerance <- read.csv(here("data-raw", "salinity_tolerance.csv"))
+# usethis::use_data(salinity_tolerance, overwrite = TRUE)
 
 # Northern Forestry Centre ecosites
 # Source: NRCan/CFS ecosite classification
-ecosites_nfc <- read.csv(here("data-raw", "ecosites_nfc.csv"))
-usethis::use_data(ecosites_nfc, overwrite = TRUE)
+# NOTE: Ecosite_to_WetClass.csv is a wetland class ↔ NFC ecosite crosswalk
+# (Beckingham & Archibald 1996), NOT the NFC ecosite classification table itself.
+# ecosites_nfc is not yet actively used in pipeline Rmds (TODO placeholder).
+# TODO (Track 2): obtain or author proper ecosites_nfc.csv and uncomment
+# ecosites_nfc <- read.csv(here("data-raw", "ecosites_nfc.csv"))
+# usethis::use_data(ecosites_nfc, overwrite = TRUE)
 
 # NRC geography regions and USACE geographic region linkage
-nrc_geography <- read.csv(here("data-raw", "nrc_geography_usace.csv"))
-usethis::use_data(nrc_geography, overwrite = TRUE)
+# TODO (Track 2): obtain nrc_geography_usace.csv and uncomment
+# nrc_geography <- read.csv(here("data-raw", "nrc_geography_usace.csv"))
+# usethis::use_data(nrc_geography, overwrite = TRUE)
 
 # WAIR wetland classification decision rules (structured table)
-wair_rules <- read.csv(here("data-raw", "wair_classification_rules.csv"))
-usethis::use_data(wair_rules, overwrite = TRUE)
+# TODO (Track 2): author wair_classification_rules.csv from WAIR document and uncomment
+# wair_rules <- read.csv(here("data-raw", "wair_classification_rules.csv"))
+# usethis::use_data(wair_rules, overwrite = TRUE)
 
 # ── Soils reference tables ────────────────────────────────────────────────────
 
@@ -136,15 +184,29 @@ usethis::use_data(wair_rules, overwrite = TRUE)
 cssc_great_groups <- read.csv(here("data-raw", "cssc_great_groups.csv"))
 usethis::use_data(cssc_great_groups, overwrite = TRUE)
 
-# Von Post peat humification scale
-von_post <- read.csv(here("data-raw", "von_post.csv"))
+# Von Post peat humification scale (H1–H10)
+# Source: Von Post (1922); standard as used in Canadian peat assessment.
+# Raw CSV has merged-cell headers from Excel export; data values are at
+# column positions 1, 6, 10, 15, 20 (degree, liquid, extruded, plant matter, description).
+von_post_raw <- read.csv(here("data-raw", "Van_Post_List.csv"),
+                          check.names = FALSE, stringsAsFactors = FALSE)
+von_post <- data.frame(
+  von_post_code = paste0("H", trimws(von_post_raw[[1]])),
+  liquid        = trimws(von_post_raw[[6]]),
+  extruded      = trimws(von_post_raw[[10]]),
+  plant_matter  = trimws(von_post_raw[[15]]),
+  description   = trimws(von_post_raw[[20]]),
+  stringsAsFactors = FALSE
+)
 usethis::use_data(von_post, overwrite = TRUE)
 
 # Munsell soil colour chart
-munsell <- read.csv(here("data-raw", "munsell.csv"))
-usethis::use_data(munsell, overwrite = TRUE)
+# TODO (Track 2): obtain munsell.csv and uncomment
+# munsell <- read.csv(here("data-raw", "munsell.csv"))
+# usethis::use_data(munsell, overwrite = TRUE)
 
 # AGRASID soil map units (Alberta Geomatic Reference for Agriculture and Soils)
 # Source: AB Agriculture
-agrasid <- read.csv(here("data-raw", "agrasid.csv"))
-usethis::use_data(agrasid, overwrite = TRUE)
+# TODO (Track 2): obtain agrasid.csv and uncomment
+# agrasid <- read.csv(here("data-raw", "agrasid.csv"))
+# usethis::use_data(agrasid, overwrite = TRUE)
