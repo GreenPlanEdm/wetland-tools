@@ -31,7 +31,7 @@ profile_plot <- function(pit_data) {
   ggplot(pit_data,
          aes(xmin = 0, xmax = 1,
              ymin = -depth_bot_cm, ymax = -depth_top_cm,
-             fill = color_name)) +
+             fill = munsell_hex)) +
     geom_rect(colour = "grey40") +
     geom_text(aes(x = 0.5, y = -(depth_top_cm + depth_bot_cm) / 2,
                   label = paste0(horizon_code, "\n", texture)),

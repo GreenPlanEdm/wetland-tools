@@ -21,13 +21,14 @@ load(here("data", "von_post.rda"))
 load(here("data", "cssc_great_groups.rda"))
 ```
 
-## Join Munsell colour descriptions
+## Join Munsell hex colour
 
 ```{r join-munsell}
 soils <- soils |>
-  left_join(munsell |> select(hue, value, chroma, color_name),
+  left_join(munsell |> select(hue, value, chroma, hex),
             by = c("munsell_hue" = "hue", "munsell_value" = "value",
-                   "munsell_chroma" = "chroma"))
+                   "munsell_chroma" = "chroma")) |>
+  rename(munsell_hex = hex)
 ```
 
 ## Join Von Post humification descriptions
