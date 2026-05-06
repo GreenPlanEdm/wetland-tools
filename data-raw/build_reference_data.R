@@ -3,6 +3,8 @@
 # Output goes to data/ as .rda files for use in package functions and Rmds.
 
 library(dplyr)
+library(tidyr)
+library(stringr)
 library(readxl)
 library(usethis)
 library(here)
@@ -159,12 +161,120 @@ usethis::use_data(rangeland_plants, overwrite = TRUE)
 # salinity_tolerance <- read.csv(here("data-raw", "salinity_tolerance.csv"))
 # usethis::use_data(salinity_tolerance, overwrite = TRUE)
 
-# Northern Forestry Centre ecosites
-# Source: NRCan/CFS ecosite classification
-# NOTE: Ecosite_to_WetClass.csv is a wetland class ↔ NFC ecosite crosswalk
-# (Beckingham & Archibald 1996), NOT the NFC ecosite classification table itself.
-# ecosites_nfc is not yet actively used in pipeline Rmds (TODO placeholder).
-# TODO (Track 2): obtain or author proper ecosites_nfc.csv and uncomment
+# Ecosite ↔ Wetland Class crosswalk (Beckingham & Archibald 1996) ─────────────
+# Source: Table from Beckingham & Archibald (1996) — NFC ecosite phases for four
+# Boreal natural regions matched to AWCS wetland class/form.
+# Raw CSV is a merged-cell Excel export; data sit in columns 1, 6, 13, 19, 28.
+# Cells may contain multiple "Ecosite phase XX (name)" entries separated by
+# newlines; .parse_ecosite_cell() splits and extracts each one.
+
+# Extract content of the outermost parenthesised group (handles nested parens).
+.outer_paren <- function(s) {
+  depth <- 0L; start <- NA_integer_
+  for (i in seq_len(nchar(s))) {
+    ch <- substr(s, i, i)
+    if (ch == "(") { if (depth == 0L) start <- i; depth <- depth + 1L }
+    else if (ch == ")") {
+      depth <- depth - 1L
+      if (depth == 0L && !is.na(start)) return(substr(s, start + 1L, i - 1L))
+    }
+  }
+  NA_character_
+}
+
+.parse_ecosite_cell <- function(text) {
+  if (is.na(text) || !nzchar(trimws(text)) ||
+      grepl("^Not recognized", trimws(text), ignore.case = TRUE)) {
+    return(data.frame(ecosite_code = NA_character_, ecosite_name = NA_character_,
+                      notes = NA_character_, recognized = FALSE,
+                      stringsAsFactors = FALSE))
+  }
+  text <- gsub("\r", "", text)
+  text <- gsub("\\s*\\|\\s*", " ", text)  # strip | artefacts from PDF export
+
+  # Case-insensitive sentinel insertion before each "Ecosite phase/Phase"
+  marked <- gsub("((?i)Ecosite phase\\s)", "\x01\\1", text, perl = TRUE)
+  parts  <- strsplit(marked, "\x01")[[1]]
+  parts  <- parts[grepl("Ecosite phase", parts, ignore.case = TRUE)]
+
+  if (!length(parts)) {
+    return(data.frame(ecosite_code = NA_character_, ecosite_name = NA_character_,
+                      notes = trimws(text), recognized = TRUE,
+                      stringsAsFactors = FALSE))
+  }
+
+  do.call(rbind, lapply(parts, function(p_orig) {
+    p_orig <- trimws(p_orig)
+    p_flat <- trimws(gsub("\n", " ", p_orig))
+
+    # Code(s): token(s) immediately after "Ecosite phase "
+    # Handles "Ecosite phase g1", "Ecosite Phase f2", "Ecosite phase h1 and h2"
+    codes_raw <- sub("^(?i)Ecosite phase\\s+([^(\\n]+?)\\s*(\\(.*)?$", "\\1",
+                     p_flat, perl = TRUE)
+    codes <- trimws(unlist(strsplit(codes_raw, "\\s+and\\s+")))
+    codes <- codes[grepl("^[a-zA-Z]\\d", codes)]
+    if (!length(codes)) codes <- NA_character_
+
+    # Name: outermost parenthesised group (handles nested parens like "(Sw)")
+    nm <- trimws(.outer_paren(p_flat))
+
+    # Notes: lines that begin with "-" in the original multiline text
+    note_lines <- grep("^\\s*-", strsplit(p_orig, "\n")[[1]], value = TRUE)
+    notes <- if (length(note_lines)) paste(trimws(note_lines), collapse = "; ") else NA_character_
+
+    data.frame(ecosite_code = codes, ecosite_name = nm, notes = notes,
+               recognized = TRUE, stringsAsFactors = FALSE)
+  }))
+}
+
+xwalk_raw <- read.csv(
+  here("data-raw", "Ecosite_to_WetClass.csv"),
+  header = FALSE, stringsAsFactors = FALSE, check.names = FALSE,
+  na.strings = c("", "NA"), encoding = "latin1"
+)
+
+# Rows 1-2 are title/region headers; rows 3-13 are data (5 columns)
+xwalk_sub <- xwalk_raw[3:nrow(xwalk_raw), 1:5]
+names(xwalk_sub) <- c("wetland_form", "Boreal Mixedwood", "Boreal Highlands",
+                       "Subarctic", "Canadian Shield")
+
+# Collapse embedded newlines in form names (artefact of multiline CSV cells)
+xwalk_sub$wetland_form <- trimws(gsub("\\s+", " ", xwalk_sub$wetland_form))
+
+class_lut <- c(
+  "Wooded Bog"                            = "Bog",
+  "Shrubby Bog"                           = "Bog",
+  "Wooded Fen"                            = "Fen",
+  "Shrubby Fen"                           = "Fen",
+  "Graminoid Fen"                         = "Fen",
+  "Graminoid Marsh"                       = "Marsh",
+  "Submersed/Floating Shallow Open Water" = "Open Water",
+  "Coniferous Wooded Swamp"               = "Swamp",
+  "Mixedwood Wooded Swamp"                = "Swamp",
+  "Deciduous Wooded Swamp"                = "Swamp",
+  "Shrubby Swamp"                         = "Swamp"
+)
+xwalk_sub$wetland_class <- class_lut[xwalk_sub$wetland_form]
+
+ecosite_wetclass <- xwalk_sub |>
+  pivot_longer(
+    cols      = c("Boreal Mixedwood", "Boreal Highlands", "Subarctic", "Canadian Shield"),
+    names_to  = "natural_region",
+    values_to = "raw_entry"
+  ) |>
+  mutate(parsed = lapply(raw_entry, .parse_ecosite_cell)) |>
+  select(-raw_entry) |>
+  unnest(cols = parsed) |>
+  select(wetland_class, wetland_form, natural_region,
+         ecosite_code, ecosite_name, notes, recognized) |>
+  mutate(notes = ifelse(trimws(notes) %in% c("-", ""), NA_character_, notes)) |>
+  arrange(wetland_class, wetland_form, natural_region)
+
+usethis::use_data(ecosite_wetclass, overwrite = TRUE)
+rm(.outer_paren, .parse_ecosite_cell)
+
+# NFC ecosite classification table (Beckingham & Archibald 1996 species/site data)
+# TODO (Track 2): extract ecosites_nfc.csv from Ecosite_nfc PDF and uncomment
 # ecosites_nfc <- read.csv(here("data-raw", "ecosites_nfc.csv"))
 # usethis::use_data(ecosites_nfc, overwrite = TRUE)
 
