@@ -279,9 +279,9 @@ rm(.outer_paren, .parse_ecosite_cell)
 # usethis::use_data(ecosites_nfc, overwrite = TRUE)
 
 # NRC geography regions and USACE geographic region linkage
-# TODO (Track 2): obtain nrc_geography_usace.csv and uncomment
-# nrc_geography <- read.csv(here("data-raw", "nrc_geography_usace.csv"))
-# usethis::use_data(nrc_geography, overwrite = TRUE)
+# Maps Alberta Natural Regions to corresponding USACE NWPL regional lists.
+nrc_geography <- read.csv(here("data-raw", "nrc_geography_usace.csv"))
+usethis::use_data(nrc_geography, overwrite = TRUE)
 
 # WAIR wetland classification decision rules (structured table)
 # TODO (Track 2): author wair_classification_rules.csv from WAIR document and uncomment
