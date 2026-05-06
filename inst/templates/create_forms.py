@@ -517,57 +517,73 @@ def build_soils_form(path):
     c = canvas.Canvas(path, pagesize=landscape(letter))
     c.setTitle("Soils Field Form — Wetland Assessment")
 
-    page_title(c, "SOILS FIELD DATA FORM", "Alberta Wetland Assessment")
+    # Issue 4: added version identifier to subtitle
+    page_title(c, "SOILS FIELD DATA FORM",
+               "Alberta Wetland Assessment  ·  AWCS / AWIDD  ·  v1.1 (2025)")
 
-    # ── Header ────────────────────────────────────────────────────────────────
-    hy = H - 50
-    header1 = [
-        ("Project ID", "s_project_id", 120),
-        ("Site ID",    "s_site_id",    100),
-        ("Plot ID",    "s_plot_id",     70),
-        ("Observer",   "s_observer",   110),
-    ]
-    x = MARGIN_L
-    for label, name, w in header1:
-        cell_rect(c, x, hy - 12, w + 40, 18, fill=HEADER_BG)
-        draw_text(c, x + 2, hy - 5, label + ":", FONT_LABEL)
-        text_field(c, name, x + 2, hy - 12, w + 36, 14, tooltip=label)
-        x += w + 44
+    # ── Header helper — 26 pt cell matching veg/hydrology form style ────────────
+    # Label in top half, text field in bottom half; they never overlap.
+    def hdr_field_s(label, name, x, y_top, w):
+        cell_rect(c, x, y_top - 26, w, 26, fill=HEADER_BG)
+        draw_text(c, x + 2, y_top - 7, label, FONT_LABEL)
+        text_field(c, name, x + 2, y_top - 25, w - 4, 13, tooltip=label)
 
-    # Pit/Probe checkboxes
-    cell_rect(c, x, hy - 12, 70, 18, fill=HEADER_BG)
-    draw_text(c, x + 2, hy - 5, "Method:", FONT_LABEL)
-    checkbox(c, "method_pit",   x + 2,  hy - 12, size=9, tooltip="Pit")
-    draw_text(c, x + 13, hy - 8, "Pit",   FONT_TINY)
-    checkbox(c, "method_probe", x + 36, hy - 12, size=9, tooltip="Probe")
-    draw_text(c, x + 47, hy - 8, "Probe", FONT_TINY)
-    x += 74
+    # ── Header row 1 ──────────────────────────────────────────────────────────
+    R1 = H - 30   # top of row-1 cells (2 pt below title bar, same as veg form)
+    x  = MARGIN_L
+    for label, name, w in [
+        ("Project ID", "s_project_id", 160),
+        ("Site ID",    "s_site_id",    140),
+        ("Plot ID",    "s_plot_id",    110),
+        ("Observer",   "s_observer",   150),
+    ]:
+        hdr_field_s(label, name, x, R1, w)
+        x += w + 4  # 4 pt gap preserved from original layout
 
-    # Depth to restrictive layer
-    cell_rect(c, x, hy - 12, 100, 18, fill=HEADER_BG)
-    draw_text(c, x + 2, hy - 5, "Depth to Restrict. Layer (cm):", FONT_LABEL)
-    text_field(c, "depth_restrict", x + 2, hy - 12, 96, 14, tooltip="Depth to Restrictive Layer (cm)")
+    # Method — label at top of 26 pt cell, checkboxes in lower portion
+    cell_rect(c, x, R1 - 26, 90, 26, fill=HEADER_BG)
+    draw_text(c, x + 2, R1 - 7, "Method", FONT_LABEL)
+    checkbox(c, "method_pit",   x + 4,  R1 - 21, size=9, tooltip="Pit")
+    draw_text(c, x + 15, R1 - 17, "Pit",   FONT_TINY)
+    checkbox(c, "method_probe", x + 42, R1 - 21, size=9, tooltip="Probe")
+    draw_text(c, x + 53, R1 - 17, "Probe", FONT_TINY)
+    x += 94  # 90 pt cell + 4 pt gap
 
-    # Row 2 of header
-    hy2 = H - 74
-    x = MARGIN_L
-    date_items = [("Date (DD)", "s_date_dd", 30), ("MM", "s_date_mm", 30), ("YYYY", "s_date_yyyy", 42)]
-    for label, name, w in date_items:
-        cell_rect(c, x, hy2 - 12, w + 20, 18, fill=HEADER_BG)
-        draw_text(c, x + 2, hy2 - 5, label + ":", FONT_LABEL)
-        text_field(c, name, x + 2, hy2 - 12, w + 16, 14, tooltip=label)
-        x += w + 24
+    # Depth to restrictive layer — fills remainder of row 1
+    hdr_field_s("Depth to Restr. Layer (cm)", "depth_restrict",
+                x, R1, MARGIN_L + USABLE_W - x)
 
-    gps_items = [("GPS Easting", "s_gps_e", 80), ("GPS Northing", "s_gps_n", 80)]
-    for label, name, w in gps_items:
-        cell_rect(c, x, hy2 - 12, w + 40, 18, fill=HEADER_BG)
-        draw_text(c, x + 2, hy2 - 5, label + ":", FONT_LABEL)
-        text_field(c, name, x + 2, hy2 - 12, w + 36, 14, tooltip=label)
-        x += w + 44
+    # ── Header row 2 ──────────────────────────────────────────────────────────
+    R2 = H - 60   # top of row-2 cells (4 pt below row-1 bottom, same as veg form)
+    x  = MARGIN_L
+    for label, name, cell_w, step in [
+        ("Date (DD)",    "s_date_dd",    70, 74),
+        ("MM",           "s_date_mm",    70, 74),
+        ("YYYY",         "s_date_yyyy",  62, 66),
+        ("GPS Easting",  "s_gps_e",     120, 124),
+        ("GPS Northing", "s_gps_n",     120, 124),
+        ("UTM Zone",     "s_utm_zone",   54, 58),
+    ]:
+        hdr_field_s(label, name, x, R2, cell_w)
+        x += step  # step = cell_w + 4 pt gap (matches original x spacing)
+
+    # Datum — label at top, checkboxes below
+    cell_rect(c, x, R2 - 26, 90, 26, fill=HEADER_BG)
+    draw_text(c, x + 2, R2 - 7, "Datum", FONT_LABEL)
+    checkbox(c, "s_datum_nad83", x + 4,  R2 - 21, size=9, tooltip="NAD83")
+    draw_text(c, x + 15, R2 - 17, "NAD83", FONT_TINY)
+    checkbox(c, "s_datum_wgs84", x + 50, R2 - 21, size=9, tooltip="WGS84")
+    draw_text(c, x + 61, R2 - 17, "WGS84", FONT_TINY)
+    x += 94
+
+    # AWCS class — fills remainder of row 2 (matches veg form pattern)
+    hdr_field_s("AWCS Wetland Class (obs.)", "s_awcs_class_obs",
+                x, R2, MARGIN_L + USABLE_W - x)
 
     # ── Column definitions ────────────────────────────────────────────────────
-    # Each row represents one soil horizon
-    # Columns must fit within USABLE_W (~756 pts)
+    # Total must equal USABLE_W = 756 pts.
+    # Redox column removed; freed 90 pts redistributed to Texture (+36), Structure (+20),
+    # and Mottles (+34) so those columns have more room rather than expanding Notes.
     cols = [
         (MARGIN_L,       28,  "Horiz."),
         (MARGIN_L + 28,  28,  "Top\n(cm)"),
@@ -575,17 +591,17 @@ def build_soils_form(path):
         (MARGIN_L + 84,  34,  "Munsell\nHue"),
         (MARGIN_L + 118, 22,  "Val."),
         (MARGIN_L + 140, 22,  "Chr."),
-        (MARGIN_L + 162, 132, "Texture"),
-        (MARGIN_L + 294, 66,  "Structure"),
-        (MARGIN_L + 360, 26,  "Von\nPost"),
-        (MARGIN_L + 386, 72,  "Material"),
-        (MARGIN_L + 458, 60,  "Mottles"),
-        (MARGIN_L + 518, 60,  "Redox"),
-        (MARGIN_L + 578, USABLE_W - 578, "Notes"),
+        (MARGIN_L + 162, 144, "Texture"),       # 12 mineral classes (was 108)
+        (MARGIN_L + 306, 75,  "Structure"),      # PL BK SBK PR MA (was 55)
+        (MARGIN_L + 381, 26,  "Von\nPost"),
+        (MARGIN_L + 407, 72,  "Material"),
+        (MARGIN_L + 479, 22,  "Coarse\nFrags"),
+        (MARGIN_L + 501, 124, "Mottles"),        # Abund + Contrast + Colour (was 90; Redox removed)
+        (MARGIN_L + 625, 131, "Notes"),
     ]
 
     chy = H - 90
-    ROW_H = 18
+    ROW_H = 22
 
     for cx, cw, clabel in cols:
         cell_rect(c, cx, chy - 22, cw, 22, fill=TITLE_BG)
@@ -594,42 +610,90 @@ def build_soils_form(path):
             draw_text(c, cx + cw / 2, chy - 9 - li * 8, line,
                       ("Helvetica-Bold", 5), colors.white, align="center")
 
-    # Sub-header labels
     shy = chy - 22
-    sub_h = 12
+    # Increased from 12 to 20 to fit two-row sub-header for Mottles/Redox
+    sub_h = 20
 
-    # Texture sub-labels  S LS SL L SiL Si SCL CL SiCL SC SiC C Muck Peat
-    tex_labels = ["S", "LS", "SL", "L", "SiL", "Si", "SCL", "CL", "SiCL", "SC", "SiC", "C", "Muck", "Peat"]
+    cell_rect(c, MARGIN_L, shy - sub_h, USABLE_W, sub_h)
+
+    # Texture: 12 mineral classes (Muck/Peat removed — they belong in Material)
+    tex_labels = ["S", "LS", "SL", "L", "SiL", "Si", "SCL", "CL", "SiCL", "SC", "SiC", "C"]
     tx0 = cols[6][0]
     tw = cols[6][1] / len(tex_labels)
     for i, lbl in enumerate(tex_labels):
-        draw_text(c, tx0 + i * tw + tw / 2, shy - 8, lbl, ("Helvetica", 4), align="center")
+        draw_text(c, tx0 + i * tw + tw / 2, shy - sub_h + 7, lbl,
+                  ("Helvetica", 4), align="center")
 
-    # Structure sub-labels GR PL BK SBK PR MA
-    str_labels = ["GR", "PL", "BK", "SBK", "PR", "MA"]
+    # Structure: 5 types (GR removed — gravel is not a structure type)
+    str_labels = ["PL", "BK", "SBK", "PR", "MA"]
     sx0 = cols[7][0]
     sw = cols[7][1] / len(str_labels)
     for i, lbl in enumerate(str_labels):
-        draw_text(c, sx0 + i * sw + sw / 2, shy - 8, lbl, ("Helvetica", 4), align="center")
+        draw_text(c, sx0 + i * sw + sw / 2, shy - sub_h + 7, lbl,
+                  ("Helvetica", 4), align="center")
 
-    # Material  Min Peat Muck Marl
+    # Material: Min Peat Muck Marl
     mat_labels = ["Min", "Peat", "Muck", "Marl"]
     mx0 = cols[9][0]
     mw = cols[9][1] / len(mat_labels)
     for i, lbl in enumerate(mat_labels):
-        draw_text(c, mx0 + i * mw + mw / 2, shy - 8, lbl, ("Helvetica", 4), align="center")
+        draw_text(c, mx0 + i * mw + mw / 2, shy - sub_h + 7, lbl,
+                  ("Helvetica", 4), align="center")
 
-    # Mottles / Redox  None Few Com Many
-    for ci in [10, 11]:
+    # Coarse Frags: Y / N
+    cf_x, cf_w = cols[10][0], cols[10][1]
+    draw_text(c, cf_x + cf_w * 0.25, shy - sub_h + 7, "Y", ("Helvetica", 4), align="center")
+    draw_text(c, cf_x + cf_w * 0.75, shy - sub_h + 7, "N", ("Helvetica", 4), align="center")
+
+    # Format hints in otherwise-blank sub-header cells
+    _hint = ("Helvetica-Oblique", 4)
+    _hint_col = colors.Color(0.55, 0.55, 0.55)
+    for ci, hint in [(3, "10YR"), (4, "x/"), (5, "/y"), (8, "H1–H10")]:
+        cx, cw, _ = cols[ci]
+        draw_text(c, cx + cw / 2, shy - sub_h + 7, hint, _hint, _hint_col, align="center")
+
+    # Mottles and Redox: two-row sub-header
+    # Sub-column widths within each 90-pt column: 36 (abundance) + 27 (contrast) + 27 (colour)
+    mot_abund_w = 49   # 4 abundance checkboxes
+    mot_contr_w = 38   # 3 contrast checkboxes
+    mot_size_w   = 38   # Munsell size checkboxes
+
+    for ci in [11]:
         cx0 = cols[ci][0]
         cw0 = cols[ci][1]
-        for i, lbl in enumerate(["None", "Few", "Com", "Many"]):
-            draw_text(c, cx0 + i * cw0 / 4 + cw0 / 8, shy - 8, lbl, ("Helvetica", 4), align="center")
 
-    cell_rect(c, MARGIN_L, shy - sub_h, USABLE_W, sub_h)
+        # Top row: group labels
+        draw_text(c, cx0 + mot_abund_w / 2,                       shy - 5,
+                  "Abundance", ("Helvetica", 3.5), align="center")
+        draw_text(c, cx0 + mot_abund_w + mot_size_w / 2, shy - 5,
+                  "Size", ("Helvetica", 3.5), align="center")
+        draw_text(c, cx0 + mot_abund_w + mot_size_w + mot_contr_w / 2, shy - 5,
+                  "Contrast",  ("Helvetica", 3.5), align="center")
+
+
+        # Horizontal divider between group row and item row
+        c.saveState()
+        c.setStrokeColor(GRID_COLOR)
+        c.setLineWidth(0.2)
+        c.line(cx0, shy - 10, cx0 + cw0, shy - 10)
+        # Vertical dividers between sub-columns
+        c.setLineWidth(0.3)
+        c.line(cx0 + mot_abund_w,              shy, cx0 + mot_abund_w,              shy - sub_h)
+        c.line(cx0 + mot_abund_w + mot_size_w, shy, cx0 + mot_abund_w + mot_size_w, shy - sub_h)
+        c.restoreState()
+
+        # Bottom row: item labels
+        for i, lbl in enumerate(["None", "Few", "Com", "Many"]):
+            draw_text(c, cx0 + i * 9 + 4.5, shy - 15, lbl, ("Helvetica", 3.5), align="center")
+        for i, lbl in enumerate(["F", "M", "C"]):
+            draw_text(c, cx0 + mot_abund_w + i * 9 + 4.5, shy - 15, lbl,
+                      ("Helvetica", 4), align="center")
+        for i, lbl in enumerate(["F", "D", "P"]):
+            draw_text(c, cx0 + mot_abund_w + mot_size_w + i * 9 + 4.5, shy - 15, lbl,
+                        ("Helvetica", 4), align="center")
 
     # ── Data rows ─────────────────────────────────────────────────────────────
-    N_ROWS = 12
+    N_ROWS = 15
     row_top = shy - sub_h
 
     for r in range(N_ROWS):
@@ -639,76 +703,168 @@ def build_soils_form(path):
 
         rn = f"{r+1:02d}"
 
-        # Text fields
+        # Text fields — standard columns (Notes is now at index 13)
         for ci, fname, tip in [
-            (0, f"horizon_{rn}",   "Horizon code"),
-            (1, f"depth_top_{rn}", "Depth top (cm)"),
-            (2, f"depth_bot_{rn}", "Depth bottom (cm)"),
-            (3, f"munsell_hue_{rn}", "Munsell Hue"),
-            (4, f"munsell_val_{rn}", "Munsell Value"),
-            (5, f"munsell_chr_{rn}", "Munsell Chroma"),
-            (8, f"von_post_{rn}",    "Von Post (H1-H10)"),
-            (12, f"s_notes_{rn}",   "Notes"),
+            (0,  f"horizon_{rn}",     "Horizon code"),
+            (1,  f"depth_top_{rn}",   "Depth top (cm)"),
+            (2,  f"depth_bot_{rn}",   "Depth bottom (cm)"),
+            (3,  f"munsell_hue_{rn}", "Munsell Hue"),
+            (4,  f"munsell_val_{rn}", "Munsell Value"),
+            (5,  f"munsell_chr_{rn}", "Munsell Chroma"),
+            (8,  f"von_post_{rn}",    "Von Post (H1-H10)"),
+            (12, f"s_notes_{rn}",     "Notes"),
         ]:
             cx, cw, _ = cols[ci]
             text_field(c, fname, cx + 1, ry + 2, cw - 2, ROW_H - 4, tooltip=tip)
 
-        # Texture checkboxes
+        # Texture checkboxes (12 mineral classes)
         tx0 = cols[6][0]
         tw = cols[6][1] / len(tex_labels)
         for i, lbl in enumerate(tex_labels):
-            checkbox(c, f"tex_{lbl.lower()}_{rn}", tx0 + i * tw + 1, ry + 4, size=9, tooltip=f"Texture {lbl}")
+            checkbox(c, f"tex_{lbl.lower()}_{rn}", tx0 + i * tw + 1, ry + 6,
+                     size=9, tooltip=f"Texture {lbl}")
 
-        # Structure checkboxes
+        # Structure checkboxes (5 types, no GR)
         sx0 = cols[7][0]
         sw = cols[7][1] / len(str_labels)
         for i, lbl in enumerate(str_labels):
-            checkbox(c, f"str_{lbl.lower()}_{rn}", sx0 + i * sw + 1, ry + 4, size=9, tooltip=f"Structure {lbl}")
+            checkbox(c, f"str_{lbl.lower()}_{rn}", sx0 + i * sw + 1, ry + 6,
+                     size=9, tooltip=f"Structure {lbl}")
 
         # Material checkboxes
         mx0 = cols[9][0]
         mw = cols[9][1] / len(mat_labels)
         for i, lbl in enumerate(mat_labels):
-            checkbox(c, f"mat_{lbl.lower()}_{rn}", mx0 + i * mw + 1, ry + 4, size=9, tooltip=f"Material {lbl}")
+            checkbox(c, f"mat_{lbl.lower()}_{rn}", mx0 + i * mw + 1, ry + 6,
+                     size=9, tooltip=f"Material {lbl}")
 
-        # Mottles checkboxes
-        cx0, cw0 = cols[10][0], cols[10][1]
+        # Coarse Frags Y/N (replaces GR in Structure)
+        checkbox(c, f"cf_y_{rn}", cf_x + 1,        ry + 6, size=9, tooltip="Coarse Fragments present")
+        checkbox(c, f"cf_n_{rn}", cf_x + cf_w / 2, ry + 6, size=9, tooltip="Coarse Fragments absent")
+
+        # Mottles: abundance (4) + size  + contrast (3)
+        mot_x = cols[11][0]
         for i, lbl in enumerate(["none", "few", "common", "many"]):
-            checkbox(c, f"mot_{lbl}_{rn}", cx0 + i * cw0 / 4 + 1, ry + 4, size=9, tooltip=f"Mottles {lbl}")
+            checkbox(c, f"mot_{lbl}_{rn}", mot_x + i * 9 + 1, ry + 6,
+                     size=9, tooltip=f"Mottles {lbl}")
+        for i, lbl in enumerate(["fine", "medium", "coarse"]):
+            checkbox(c, f"mot_{lbl}_{rn}", mot_x + mot_abund_w + i * 9 + 1, ry + 6,
+                     size=9, tooltip=f"Mottle size {lbl}")
+        for i, lbl in enumerate(["faint", "distinct", "prominent"]):
+            checkbox(c, f"mot_contr_{lbl}_{rn}", mot_x + mot_abund_w + mot_size_w + i * 9 + 1, ry + 6,
+                     size=9, tooltip=f"Mottle contrast {lbl}")
 
-        # Redox checkboxes
-        cx0, cw0 = cols[11][0], cols[11][1]
-        for i, lbl in enumerate(["none", "few", "common", "many"]):
-            checkbox(c, f"rdx_{lbl}_{rn}", cx0 + i * cw0 / 4 + 1, ry + 4, size=9, tooltip=f"Redox {lbl}")
+    # ── Column group dividers spanning full data-row height ───────────────────
+    data_bot = row_top - N_ROWS * ROW_H
+    c.saveState()
+    c.setStrokeColor(GRID_COLOR)
+    c.setLineWidth(0.4)
+    for cx, cw, _ in cols:
+        c.line(cx, data_bot, cx, row_top)
+    last_cx, last_cw, _ = cols[-1]
+    c.line(last_cx + last_cw, data_bot, last_cx + last_cw, row_top)
+    c.restoreState()
 
-    # ── Footer ────────────────────────────────────────────────────────────────
-    fy = row_top - N_ROWS * ROW_H - 4
-    footer_h = 52
+    # ── Hydric Soil Summary ───────────────────────────────────────────────────
+    HS_BAR = 13
+    HS_ROW = 16
+    hs_top = row_top - N_ROWS * ROW_H - 4
 
-    cell_rect(c, MARGIN_L, fy - footer_h, USABLE_W, footer_h, fill=HEADER_BG)
+    cell_rect(c, MARGIN_L, hs_top - HS_BAR, USABLE_W, HS_BAR, fill=TITLE_BG)
+    draw_text(c, MARGIN_L + 4, hs_top - HS_BAR + 4, "HYDRIC SOIL SUMMARY",
+              ("Helvetica-Bold", 7), colors.white)
 
-    draw_text(c, MARGIN_L + 2, fy - 9, "Hydric Soil Indicators Present:", FONT_LABEL)
-    checkbox(c, "hydric_ind_yes", MARGIN_L + 120, fy - 14, size=9, tooltip="Yes")
-    draw_text(c, MARGIN_L + 131, fy - 10, "Yes", FONT_TINY)
-    checkbox(c, "hydric_ind_no",  MARGIN_L + 148, fy - 14, size=9, tooltip="No")
-    draw_text(c, MARGIN_L + 159, fy - 10, "No", FONT_TINY)
+    hs_ry = hs_top - HS_BAR - HS_ROW
+    cell_rect(c, MARGIN_L, hs_ry, USABLE_W, HS_ROW, fill=HEADER_BG)
+    draw_text(c, MARGIN_L + 2, hs_ry + 10, "Hydric Soil Indicators Present:", FONT_LABEL)
+    checkbox(c, "hydric_ind_yes", MARGIN_L + 120, hs_ry + 3, size=9, tooltip="Yes")
+    draw_text(c, MARGIN_L + 131, hs_ry + 7,  "Yes",      FONT_TINY)
+    checkbox(c, "hydric_ind_no",  MARGIN_L + 148, hs_ry + 3, size=9, tooltip="No")
+    draw_text(c, MARGIN_L + 159, hs_ry + 7,  "No",       FONT_TINY)
+    draw_text(c, MARGIN_L + 182, hs_ry + 10, "Hydric Soil Criterion Met:", FONT_LABEL)
+    checkbox(c, "hydric_met_yes",      MARGIN_L + 290, hs_ry + 3, size=9, tooltip="Yes")
+    draw_text(c, MARGIN_L + 301, hs_ry + 7,  "Yes",      FONT_TINY)
+    checkbox(c, "hydric_met_no",       MARGIN_L + 316, hs_ry + 3, size=9, tooltip="No")
+    draw_text(c, MARGIN_L + 327, hs_ry + 7,  "No",       FONT_TINY)
+    checkbox(c, "hydric_met_marginal", MARGIN_L + 340, hs_ry + 3, size=9, tooltip="Marginal")
+    draw_text(c, MARGIN_L + 351, hs_ry + 7,  "Marginal", FONT_TINY)
+    draw_text(c, MARGIN_L + 420, hs_ry + 10, "Soil Great Group (field assessment):", FONT_LABEL)
+    text_field(c, "great_group", MARGIN_L + 560, hs_ry + 2, 188, 12, tooltip="Soil Great Group")
 
-    draw_text(c, MARGIN_L + 182, fy - 9, "Hydric Soil Criterion Met:", FONT_LABEL)
-    checkbox(c, "hydric_met_yes",      MARGIN_L + 290, fy - 14, size=9, tooltip="Yes")
-    draw_text(c, MARGIN_L + 301, fy - 10, "Yes", FONT_TINY)
-    checkbox(c, "hydric_met_no",       MARGIN_L + 316, fy - 14, size=9, tooltip="No")
-    draw_text(c, MARGIN_L + 327, fy - 10, "No", FONT_TINY)
-    checkbox(c, "hydric_met_marginal", MARGIN_L + 340, fy - 14, size=9, tooltip="Marginal")
-    draw_text(c, MARGIN_L + 351, fy - 10, "Marginal", FONT_TINY)
+    # ── Additional Notes ──────────────────────────────────────────────────────
+    AN_BAR   = 13
+    AN_FIELD = 24
+    an_top = hs_ry - 2
 
-    draw_text(c, MARGIN_L + 420, fy - 9, "Soil Great Group (field assessment):", FONT_LABEL)
-    text_field(c, "great_group", MARGIN_L + 560, fy - 14, 188, 12, tooltip="Soil Great Group")
+    cell_rect(c, MARGIN_L, an_top - AN_BAR, USABLE_W, AN_BAR, fill=TITLE_BG)
+    draw_text(c, MARGIN_L + 4, an_top - AN_BAR + 4, "ADDITIONAL NOTES",
+              ("Helvetica-Bold", 7), colors.white)
 
-    draw_text(c, MARGIN_L + 2, fy - 22, "Additional Notes:", FONT_LABEL)
-    text_field(c, "s_add_notes", MARGIN_L + 2, fy - footer_h + 14,
-               USABLE_W - 4, 18, tooltip="Additional Notes", multiline=True)
+    an_ry = an_top - AN_BAR - AN_FIELD
+    cell_rect(c, MARGIN_L, an_ry, USABLE_W, AN_FIELD, fill=ROW_ALT)
+    text_field(c, "s_add_notes", MARGIN_L + 2, an_ry + 2,
+               USABLE_W - 4, AN_FIELD - 4, tooltip="Additional Notes", multiline=True)
 
-    draw_text(c, MARGIN_L + 2, fy - footer_h + 10,
+    # ── Physiogeography ───────────────────────────────────────────────────────
+    PG_BAR = 13
+    PG_ROW = 16
+    pg_top = an_ry - 2
+
+    cell_rect(c, MARGIN_L, pg_top - PG_BAR, USABLE_W, PG_BAR, fill=TITLE_BG)
+    draw_text(c, MARGIN_L + 4, pg_top - PG_BAR + 4, "PHYSIOGEOGRAPHY",
+              ("Helvetica-Bold", 7), colors.white)
+
+    # Row 1 — Slope Position, Slope %, Aspect, Drainage
+    pg_r1 = pg_top - PG_BAR - PG_ROW
+    cell_rect(c, MARGIN_L, pg_r1, USABLE_W, PG_ROW, fill=HEADER_BG)
+    draw_text(c, MARGIN_L + 2, pg_r1 + 10, "Slope Position:", FONT_LABEL)
+    sp_x = MARGIN_L + 66
+    for lbl, nm, step in [
+        ("C",     "crest",       20),
+        ("U",     "upper",       20),
+        ("M",     "mid",         20),
+        ("L",     "lower",       20),
+        ("D",     "depression",  20),
+        ("Level", "level",       36),
+    ]:
+        checkbox(c, f"slope_pos_{nm}", sp_x, pg_r1 + 4, size=8, tooltip=f"Slope Position {lbl}")
+        draw_text(c, sp_x + 10, pg_r1 + 8, lbl, FONT_TINY)
+        sp_x += step
+    draw_text(c, sp_x + 4,   pg_r1 + 10, "Slope %:",   FONT_LABEL)
+    text_field(c, "slope_pct",  sp_x + 34, pg_r1 + 2, 34, PG_ROW - 4, tooltip="Slope (%)")
+    draw_text(c, sp_x + 76,  pg_r1 + 10, "Aspect (°):", FONT_LABEL)
+    text_field(c, "aspect_deg", sp_x + 114, pg_r1 + 2, 36, PG_ROW - 4, tooltip="Aspect (degrees from N)")
+    draw_text(c, sp_x + 160, pg_r1 + 10, "Drainage:", FONT_LABEL)
+    dr_x = sp_x + 198
+    for lbl, nm, step in [
+        ("R",  "rapid",     18),
+        ("W",  "well",      18),
+        ("MW", "mod_well",  26),
+        ("I",  "imperfect", 18),
+        ("P",  "poor",      18),
+        ("VP", "very_poor", 28),
+    ]:
+        checkbox(c, f"drainage_{nm}", dr_x, pg_r1 + 4, size=8, tooltip=f"Drainage {lbl}")
+        draw_text(c, dr_x + 10, pg_r1 + 8, lbl, FONT_TINY)
+        dr_x += step
+
+    # Row 2 — Surface Stones, Surface Expression
+    pg_r2 = pg_r1 - PG_ROW
+    cell_rect(c, MARGIN_L, pg_r2, USABLE_W, PG_ROW, fill=colors.white)
+    draw_text(c, MARGIN_L + 2, pg_r2 + 10, "Surface Stones:", FONT_LABEL)
+    ss_x = MARGIN_L + 66
+    for lbl, nm in [("S0","s0"),("S1","s1"),("S2","s2"),("S3","s3"),("S4","s4"),("S5","s5")]:
+        checkbox(c, f"surf_stones_{nm}", ss_x, pg_r2 + 4, size=8, tooltip=f"Surface Stones {lbl}")
+        draw_text(c, ss_x + 10, pg_r2 + 8, lbl, FONT_TINY)
+        ss_x += 28
+    draw_text(c, ss_x + 4, pg_r2 + 10, "Surface Expression:", FONT_LABEL)
+    se_x = ss_x + 76
+    for lbl in ["a","b","f","h","i","l","m","r","s","t","u","v"]:
+        checkbox(c, f"surf_expr_{lbl}", se_x, pg_r2 + 4, size=8, tooltip=f"Surface Expression {lbl}")
+        draw_text(c, se_x + 10, pg_r2 + 8, lbl, FONT_TINY)
+        se_x += 20
+
+    draw_text(c, MARGIN_L + 2, pg_r2 - 8,
               "Attach soil profile sketch on reverse side.",
               ("Helvetica-Oblique", 6.5), colors.HexColor("#555555"))
 

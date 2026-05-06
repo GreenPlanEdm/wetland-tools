@@ -25,9 +25,48 @@ Each tool follows a four-step Rmd sequence:
 3. `03_transform.Rmd` — cross-reference tables, classify plots
 4. `04_visualize.Rmd` — produce figures for insertion into client reports
 
-## Reference datasets
+## Reference data pipeline
 
-Run `data-raw/build_reference_data.R` to rebuild all processed reference `.rda` files from source CSVs. Source files are not committed — see `.gitignore`.
+`data-raw/` holds **source files** (CSVs, Excel, PDFs) and the build script.
+`data/` holds **compiled R datasets** (`.rda` files) that the package and analysis Rmds load via `data()`.
+
+The workflow is:
+
+```
+data-raw/*.csv  →  build_reference_data.R  →  data/*.rda
+```
+
+Run the build script whenever a source CSV is updated:
+
+```r
+source("data-raw/build_reference_data.R")
+```
+
+### Currently built datasets
+
+| `.rda` file | Source CSV | Description |
+|---|---|---|
+| `wetland_indicator_status` | `ABWetlandPlantList_2021.csv` | UPL–OBL status for AB species (WMVC/GP/NCNE/AK regions) |
+| `awcs_wetland_species` | `awcs_wetland_species.csv` | AWCS 2015 provincial plant list with indicator assignments |
+| `anpc_wetland_species` | `ANPC_Native_Plant_List.csv` | ACIMS native plant list used for species code validation |
+| `rangeland_plants` | `RangePlants_2023.csv` | AEP rangeland plants with forage/grazing attributes |
+| `noxious_weeds` | `noxious_weeds_ab.csv` | AB Weed Control Act noxious and nuisance weed list |
+| `cssc_great_groups` | `cssc_great_groups.csv` | Canadian System of Soil Classification great groups |
+| `von_post` | `Van_Post_List.csv` | Von Post peat humification scale (H1–H10) |
+
+### Pending datasets (Track 2)
+
+The build script contains commented-out stubs for these — source CSVs do not yet exist and need to be authored or obtained:
+
+- `invasive_species` — AB Invasive Species Council list
+- `ecosites_nfc` — NRC Northern Forestry Centre ecosite classification
+- `salinity_tolerance` — plant salinity tolerance (literature compilation)
+- `munsell` — Munsell soil colour chart
+- `agrasid` — AGRASID soil map units
+- `nrc_geography` — NRCan geographic regions / USACE linkage
+- `wair_rules` — WAIR wetland classification decision rules
+
+To add a new dataset: place the source CSV in `data-raw/`, add a read + `usethis::use_data()` block in `build_reference_data.R`, then re-run the script.
 
 ## Dependencies
 
