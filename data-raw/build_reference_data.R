@@ -310,10 +310,22 @@ von_post <- data.frame(
 )
 usethis::use_data(von_post, overwrite = TRUE)
 
-# Munsell soil colour chart
-# TODO (Track 2): obtain munsell.csv and uncomment
-# munsell <- read.csv(here("data-raw", "munsell.csv"))
-# usethis::use_data(munsell, overwrite = TRUE)
+# Munsell soil colour chart — full renotation dataset (10 450 chips)
+# Source: aqp R package (Beaudette et al.) — derived from the Munsell Color
+# Science Laboratory renotation data (Newhall 1943 / ISCC-NBS).
+# Columns: hue, value, chroma, r, g, b (sRGB 0–1), L, A, B (CIE L*a*b*), hex.
+# Used for soil colour display and hydric indicator assessment (low chroma ≤ 2).
+# Requires aqp >= 2.0: install.packages("aqp")
+local({
+  e <- new.env()
+  data("munsell", package = "aqp", envir = e)
+  m <- e$munsell
+  rgb_c <- pmin(pmax(m[, c("r", "g", "b")], 0), 1)
+  m$hex <- rgb(rgb_c$r, rgb_c$g, rgb_c$b)
+  munsell <<- m
+})
+usethis::use_data(munsell, overwrite = TRUE)
+rm(munsell)
 
 # AGRASID soil map units (Alberta Geomatic Reference for Agriculture and Soils)
 # Source: AB Agriculture
