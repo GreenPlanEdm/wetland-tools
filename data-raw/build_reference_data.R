@@ -76,11 +76,16 @@ generate_spp_codes <- function(sci_names) {
 
 # ── Vegetation reference tables ───────────────────────────────────────────────
 
-# AB Invasive Species Council species list
-# Source: https://abinvasives.ca/
-# TODO (Track 2): obtain invasive_species_ab.csv and uncomment
-# invasive_species <- read.csv(here("data-raw", "invasive_species_ab.csv"))
-# usethis::use_data(invasive_species, overwrite = TRUE)
+# AB Invasive Species Council (AISC) plant list — 4th ed. 2022
+# Source: Alberta Invasive Species Council, "Invasive Plants of Alberta" 4th ed.
+# CSV is extracted from the source PDF by data-raw/extract_aisc_invasive_plants.R.
+# Categories: prohibited_noxious + noxious (regulated under AB Weed Control Act)
+# and unregulated_invasive (AISC-listed but not statutorily regulated).
+# 84 species total. Some overlap with `noxious_weeds.rda` is expected — that
+# table holds the richer WCA metadata; this one is the AISC source list.
+invasive_species <- read.csv(here("data-raw", "aisc_invasive_plants.csv"),
+                              stringsAsFactors = FALSE)
+usethis::use_data(invasive_species, overwrite = TRUE)
 
 # AB Weed Control Act — Noxious and Nuisance weeds
 # Source: AB King's Printer / AEP
@@ -327,8 +332,9 @@ local({
 usethis::use_data(munsell, overwrite = TRUE)
 rm(munsell)
 
-# AGRASID soil map units (Alberta Geomatic Reference for Agriculture and Soils)
-# Source: AB Agriculture
-# TODO (Track 2): obtain agrasid.csv and uncomment
-# agrasid <- read.csv(here("data-raw", "agrasid.csv"))
-# usethis::use_data(agrasid, overwrite = TRUE)
+# NOTE: AGRASID was previously listed as a Track 2 dataset but has been
+# dropped (issue #4 closing note): the data is a large spatial layer
+# (polygons + soil correlation tables), not a tabular reference, and the
+# wetland pipeline doesn't depend on it. If polygon overlays are needed
+# in future, load AGRASID directly from its source GIS layer with sf/terra
+# rather than baking it into data/.

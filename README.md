@@ -58,7 +58,7 @@ source("data-raw/build_reference_data.R")
 **Where do I put new client field data?** Under `data-raw/projects/<project_id>/` — gitignored by default.
 **Where do I put a new reference CSV?** Drop it in `data-raw/`, add an `!data-raw/<file>.csv` line to `.gitignore`, and add a read block to `build_reference_data.R`.
 
-### Currently built datasets (10)
+### Currently built datasets (11)
 
 | `.rda` file | Source | Description |
 |---|---|---|
@@ -66,24 +66,25 @@ source("data-raw/build_reference_data.R")
 | `awcs_wetland_species` | `awcs_wetland_species.csv` | AWCS 2015 provincial plant list with indicator assignments |
 | `anpc_wetland_species` | `ANPC_Native_Plant_List.csv` | ACIMS native plant list used for species code validation |
 | `rangeland_plants` | `RangePlants_2023.csv` | AEP rangeland plants with forage/grazing attributes |
-| `noxious_weeds` | `noxious_weeds_ab.csv` | AB Weed Control Act noxious and nuisance weed list |
+| `noxious_weeds` | `noxious_weeds_ab.csv` | AB Weed Control Act noxious and nuisance weed list (richer regulatory metadata) |
+| `invasive_species` | `aisc_invasive_plants.csv` | AISC "Invasive Plants of Alberta" 4th ed. (2022); 84 species across prohibited noxious / noxious / unregulated invasive |
 | `ecosite_wetclass` | `Ecosite_to_WetClass.csv` | Beckingham & Archibald 1996 ecosite phase ↔ AWCS wetland class crosswalk (Boreal NRs) |
 | `nrc_geography` | `nrc_geography_usace.csv` | Alberta Natural Region ↔ USACE NWPL regional list bridge |
 | `cssc_great_groups` | `cssc_great_groups.csv` | Canadian System of Soil Classification great groups |
 | `von_post` | `Van_Post_List.csv` | Von Post peat humification scale (H1–H10) |
 | `munsell` | `aqp::munsell` (R package, no CSV) | 10,450 Munsell chips with sRGB + L\*a\*b\* + hex |
 
+The `aisc_invasive_plants.csv` is itself derived from a PDF — see `data-raw/extract_aisc_invasive_plants.R` (the source PDF is gitignored; the extracted CSV is committed).
+
 ### Pending datasets (Track 2)
 
-The build script contains commented-out stubs for these — source CSVs need to be authored or obtained before they can be built:
+The build script contains commented-out stubs for these — source material is needed before they can be built:
 
-- `invasive_species` — AB Invasive Species Council list
-- `ecosites_nfc` — full NRC ecosite phase classification (distinct from `ecosite_wetclass`, which is only the wetland crosswalk)
+- `ecosites_nfc` — full NRC ecosite phase classification, Beckingham & Archibald 1996 (distinct from `ecosite_wetclass`, which is only the wetland crosswalk)
 - `salinity_tolerance` — plant salinity tolerance (Thurber Wetland Monitoring Project + literature)
-- `agrasid` — AGRASID soil map units
 - `wair_rules` — WAIR wetland classification decision rules
 
-These are tracked in [issue #4](https://github.com/GreenPlanEdm/wetland-tools/issues/4).
+These are tracked in [issue #4](https://github.com/GreenPlanEdm/wetland-tools/issues/4). `agrasid` was dropped from the list — it's a spatial polygon dataset, not a tabular reference; load it directly via `sf`/`terra` when needed.
 
 ## Dependencies
 

@@ -1,0 +1,85 @@
+"scientific_name","common_name","aisc_category","wca_regulated"
+"Arctium lappa","Burdock, Great","noxious",TRUE
+"Arctium minus","Burdock, Lesser","noxious",TRUE
+"Arctium tomentosum","Burdock, Woolly","noxious",TRUE
+"Bromus japonicus","Brome, Japanese","noxious",TRUE
+"Bromus tectorum","Brome, Downy","noxious",TRUE
+"Campanula rapunculoides","Bellflower, Creeping","noxious",TRUE
+"Cirsium arvense","Thistle, Canada","noxious",TRUE
+"Clematis tangutica","Clematis, Yellow","noxious",TRUE
+"Convolvulus arvensis","Bindweed, Field","noxious",TRUE
+"Cynoglossum officinale","Hound's Tongue","noxious",TRUE
+"Echium vulgare","Blueweed","noxious",TRUE
+"Euphorbia virgata","Spurge, Leafy","noxious",TRUE
+"Gypsophila paniculata","Baby's Breath, Common","noxious",TRUE
+"Hesperis matronalis","Dame's Rocket","noxious",TRUE
+"Hyoscyamus niger","Henbane, Black","noxious",TRUE
+"Knautia arvensis","Scabious, Field","noxious",TRUE
+"Lepidium latifolium","Pepper-Grass, Broad-Leaved","noxious",TRUE
+"Lepidium spp","Hoary Cress","noxious",TRUE
+"Leucanthemum vulgare","Daisy, Oxeye","noxious",TRUE
+"Linaria dalmatica","Toadflax, Dalmatian","noxious",TRUE
+"Linaria vulgaris","Toadflax, Yellow","noxious",TRUE
+"Ranunculus acris","Buttercup, Tall","noxious",TRUE
+"Silene latifolia","Cockle, White","noxious",TRUE
+"Sonchus arvensis","Sow Thistle, Perennial","noxious",TRUE
+"Tanacetum vulgare","Tansy, Common","noxious",TRUE
+"Tripleurospermum inodorum","Chamomile, Scentless","noxious",TRUE
+"Verbascum thapsus","Mullein, Common","noxious",TRUE
+"Aegilops cylindrica","Goatgrass, Jointed","prohibited_noxious",TRUE
+"Alliaria petiolata","Garlic Mustard","prohibited_noxious",TRUE
+"Berberis vulgaris","Barberry, Common","prohibited_noxious",TRUE
+"Berteroa incana","Hoary Alyssum","prohibited_noxious",TRUE
+"Butomus umbellatus","Flowering Rush","prohibited_noxious",TRUE
+"Carduus acanthoides","Thistle, Plumeless","prohibited_noxious",TRUE
+"Carduus nutans","Thistle, Nodding","prohibited_noxious",TRUE
+"Centaurea × moncktonii","Knapweed, Meadow","prohibited_noxious",TRUE
+"Centaurea × psammogena","Knapweed, Hybrid","prohibited_noxious",TRUE
+"Centaurea diffusa","Knapweed, Diffuse","prohibited_noxious",TRUE
+"Centaurea jacea","Knapweed, Brown","prohibited_noxious",TRUE
+"Centaurea macrocephala","Knapweed, Bighead","prohibited_noxious",TRUE
+"Centaurea nigra","Knapweed, Black","prohibited_noxious",TRUE
+"Centaurea nigrescens","Knapweed, Tyrol","prohibited_noxious",TRUE
+"Centaurea solstitialis","Starthistle, Yellow","prohibited_noxious",TRUE
+"Centaurea stoebe","Knapweed, Spotted","prohibited_noxious",TRUE
+"Centaurea virgata","Knapweed, Squarrose","prohibited_noxious",TRUE
+"Chondrilla juncea","Rush Skeletonweed","prohibited_noxious",TRUE
+"Cirsium palustre","Thistle, Marsh","prohibited_noxious",TRUE
+"Crupina vulgaris","Crupina, Common","prohibited_noxious",TRUE
+"Cyperus esculentus","Nutsedge, Yellow","prohibited_noxious",TRUE
+"Elaeagnus umbellata","Autumn Olive","prohibited_noxious",TRUE
+"Fallopia × bohemica","Knotweed, Hybrid","prohibited_noxious",TRUE
+"Fallopia japonica","Knotweed, Japanese","prohibited_noxious",TRUE
+"Fallopia sachalinensis","Knotweed, Giant","prohibited_noxious",TRUE
+"Halogeton glomeratus","Saltlover","prohibited_noxious",TRUE
+"Heracleum mantegazzianum","Hogweed, Giant","prohibited_noxious",TRUE
+"Hypericum perforatum","St John's-wort, Common","prohibited_noxious",TRUE
+"Impatiens glandulifera","Balsam, Himalayan","prohibited_noxious",TRUE
+"Iris pseudacorus","Iris, Pale Yellow","prohibited_noxious",TRUE
+"Isatis tinctoria","Dyer's Woad","prohibited_noxious",TRUE
+"Jacobaea vulgaris","Ragwort, Tansy","prohibited_noxious",TRUE
+"Lythrum salicaria","Loosestrife, Purple","prohibited_noxious",TRUE
+"Myriophyllum spicatum","Eurasian Water Milfoil","prohibited_noxious",TRUE
+"Odontites vernus","Bartsia, Red","prohibited_noxious",TRUE
+"Pilosella aurantiaca","Hawkweed, Orange","prohibited_noxious",TRUE
+"Pilosella caespitosa","Hawkweed, Meadow","prohibited_noxious",TRUE
+"Pilosella officinarum","Hawkweed, Mouse-ear","prohibited_noxious",TRUE
+"Potentilla recta","Cinquefoil, Sulphur","prohibited_noxious",TRUE
+"Rhamnus cathartica","Buckthorn, Common","prohibited_noxious",TRUE
+"Rhaponticum repens","Knapweed, Russian","prohibited_noxious",TRUE
+"Taeniatherum caput-medusae","Medusahead","prohibited_noxious",TRUE
+"Tamarix spp","Tamarisk","prohibited_noxious",TRUE
+"Tribulus terrestris","Puncturevine","prohibited_noxious",TRUE
+"Artemisia absinthium","Absinthe Wormwood","unregulated_invasive",FALSE
+"Astragalus cicer","Cicer Milkvetch","unregulated_invasive",FALSE
+"Carum carvi","Wild Caraway","unregulated_invasive",FALSE
+"Cirsium vulgare","Thistle, Bull","unregulated_invasive",FALSE
+"Datura stramonium","Jimsonweed","unregulated_invasive",FALSE
+"Daucus carota","Queen Anne's Lace","unregulated_invasive",FALSE
+"Elaeagnus angustifolia","Russian Olive","unregulated_invasive",FALSE
+"Lolium persicum","Persian Darnel","unregulated_invasive",FALSE
+"Pastinaca sativa","Wild Parsnip","unregulated_invasive",FALSE
+"Persicaria wallichii","Knotweed, Himalayan","unregulated_invasive",FALSE
+"Pilosella glomerata","Hawkweed, Yellowdevil","unregulated_invasive",FALSE
+"Pilosella piloselloides","Hawkweed, Tall","unregulated_invasive",FALSE
+"Thesium arvense","Thesium","unregulated_invasive",FALSE
