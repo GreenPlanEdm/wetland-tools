@@ -57,15 +57,38 @@ analysis/**/*_files/
 # Keep fillable PDF templates in version control
 !inst/templates/*.pdf
 
-# Raw client field data — never commit
+# data-raw/ policy:
+#   - Reference tables (province-wide lookups: species lists, soil classifications,
+#     ecosite crosswalks, etc.) are COMMITTED so anyone can rebuild data/*.rda
+#     from a fresh clone by sourcing build_reference_data.R.
+#   - Project-specific client field data is NEVER committed. Drop it under
+#     data-raw/projects/ (kept out of git by the rule below).
+#   - Original Excel/PDF sources are ignored; the canonical reference is the CSV.
+
+# Project field data — never commit
+data-raw/projects/
+
+# Original Excel/PDF sources of reference tables (large; CSV is canonical)
 data-raw/*.xlsx
 data-raw/*.xls
+data-raw/*.pdf
+
+# Default: ignore CSVs in data-raw/, then explicitly allow each reference table
+# read by build_reference_data.R. When adding a new reference CSV, add it here.
 data-raw/*.csv
-!data-raw/build_reference_data.R
-# Shared reference tables — safe to commit
-!data-raw/cssc_great_groups.csv
+!data-raw/ABWetlandPlantList_2021.csv
+!data-raw/ANPC_Native_Plant_List.csv
+!data-raw/AWCS_Plant_List.csv
+!data-raw/Alberta Rare Plants.csv
+!data-raw/Ecosite_to_WetClass.csv
+!data-raw/RangePlants_2023.csv
+!data-raw/Van_Post_List.csv
 !data-raw/awcs_wetland_species.csv
+!data-raw/cssc_great_groups.csv
 !data-raw/noxious_weeds_ab.csv
+!data-raw/nrc_geography_usace.csv
+
+!data-raw/build_reference_data.R
 
 # IDE and editor directories
 .idea/

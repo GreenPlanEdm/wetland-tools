@@ -70,7 +70,7 @@ Reference tables (species indicator status, invasive/noxious lists, ANPC wetland
 source("data-raw/build_reference_data.R")
 ```
 
-Source CSVs are not committed (see `.gitignore`). When adding or modifying reference data, always update the build script — never hand-edit `.rda` files directly.
+Reference CSVs **are** committed (whitelisted in `.gitignore`); project-specific client field data goes under `data-raw/projects/` and is ignored. See the "Reference data pipeline" section of `README.md` for the full policy. Never hand-edit `.rda` files directly — always update the source CSV and re-run the build script.
 
 ---
 
