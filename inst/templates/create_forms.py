@@ -172,22 +172,23 @@ def build_veg_form(path):
 
     # ── Column layout ─────────────────────────────────────────────────────────
     ML = MARGIN_L
-    C_SPP  = (ML,        80)
-    C_NAME = (ML +  80, 162)
-    C_T    = (ML + 242,  18)
-    C_S    = (ML + 260,  18)
-    C_G    = (ML + 278,  18)
-    C_M    = (ML + 296,  18)
-    C_COV  = (ML + 314,  54)
-    C_NE   = (ML + 368,  46)
-    C_OBL  = (ML + 414,  18)
-    C_FACW = (ML + 432,  20)
-    C_FAC  = (ML + 452,  18)
-    C_FACU = (ML + 470,  20)
-    C_UPL  = (ML + 490,  18)
-    C_NL   = (ML + 508,  16)
-    C_INV  = (ML + 524,  26)
-    C_NOX  = (ML + 550,  26)
+    # N/E and Nox. dropped from form — derived in 03_transform.Rmd from
+    # ANPC native list and Alberta noxious weeds reference table.
+    # Moss (M) stratum dropped — Green Plan field protocol records Tree /
+    # Shrub / Ground only; freed width given to the Scientific/Common Name col.
+    C_SPP  = (ML,        90)
+    C_NAME = (ML +  90, 238)
+    C_T    = (ML + 328,  18)
+    C_S    = (ML + 346,  18)
+    C_G    = (ML + 364,  18)
+    C_COV  = (ML + 382,  58)
+    C_OBL  = (ML + 440,  18)
+    C_FACW = (ML + 458,  20)
+    C_FAC  = (ML + 478,  18)
+    C_FACU = (ML + 496,  20)
+    C_UPL  = (ML + 516,  18)
+    C_NL   = (ML + 534,  16)
+    C_INV  = (ML + 550,  26)
     C_NOT  = (ML + 576, 180)
 
     # ── Main column header row ────────────────────────────────────────────────
@@ -198,18 +199,15 @@ def build_veg_form(path):
     def hdr_col(cx, cw, label):
         cell_rect(c, cx, chy - MAIN_H, cw, MAIN_H, fill=TITLE_BG)
         draw_text(c, cx + cw / 2, chy - MAIN_H + 4, label,
-                  ("Helvetica-Bold", 5.5), colors.white, align="center")
+                  ("Helvetica-Bold", 8), colors.white, align="center")
 
     hdr_col(*C_SPP,  "Species Code")
     hdr_col(*C_NAME, "Scientific / Common Name")
-    hdr_col(C_T[0], C_T[1]+C_S[1]+C_G[1]+C_M[1],
-            "Stratum  (T=10m · S=5m · G=1×1m · M=1×1m)")
+    hdr_col(C_T[0], C_T[1]+C_S[1]+C_G[1], "Stratum")
     hdr_col(*C_COV,  "% Cover")
-    hdr_col(*C_NE,   "N / E")
     hdr_col(C_OBL[0], C_OBL[1]+C_FACW[1]+C_FAC[1]+C_FACU[1]+C_UPL[1]+C_NL[1],
             "WI Status")
     hdr_col(*C_INV,  "Inv.")
-    hdr_col(*C_NOX,  "Nox.")
     hdr_col(*C_NOT,  "Notes")
 
     # ── Sub-header row ────────────────────────────────────────────────────────
@@ -218,14 +216,11 @@ def build_veg_form(path):
 
     def sub(cx, cw, label):
         draw_text(c, cx + cw / 2, shy - SUB_H + 3, label,
-                  ("Helvetica", 4.5), align="center")
+                  ("Helvetica", 6), align="center")
 
     sub(*C_T,    "T")
     sub(*C_S,    "S")
     sub(*C_G,    "G")
-    sub(*C_M,    "M")
-    sub(C_NE[0],      23, "N")
-    sub(C_NE[0] + 23, 23, "E")
     sub(*C_OBL,  "OBL")
     sub(*C_FACW, "FACW")
     sub(*C_FAC,  "FAC")
@@ -234,8 +229,6 @@ def build_veg_form(path):
     sub(*C_NL,   "NL")
     sub(C_INV[0],      13, "Y")
     sub(C_INV[0] + 13, 13, "N")
-    sub(C_NOX[0],      13, "Y")
-    sub(C_NOX[0] + 13, 13, "N")
 
     # ── Data rows (15 rows × 18 pt) ───────────────────────────────────────────
     N_ROWS = 15
@@ -253,15 +246,12 @@ def build_veg_form(path):
         text_field(c, f"spp_name_{rn}", C_NAME[0] + 1, ry + 2,
                    C_NAME[1] - 2, ROW_H - 4, tooltip=f"Species name row {r+1}")
 
-        for col, lbl in [(C_T, "T"), (C_S, "S"), (C_G, "G"), (C_M, "M")]:
+        for col, lbl in [(C_T, "T"), (C_S, "S"), (C_G, "G")]:
             checkbox(c, f"strat_{lbl}_{rn}", col[0] + 4, ry + 4,
                      size=9, tooltip=f"Stratum {lbl} row {r+1}")
 
         text_field(c, f"pct_cover_{rn}", C_COV[0] + 1, ry + 2,
                    C_COV[1] - 2, ROW_H - 4, tooltip=f"% Cover row {r+1}")
-
-        checkbox(c, f"native_{rn}", C_NE[0] + 4,  ry + 4, size=9, tooltip="Native")
-        checkbox(c, f"exotic_{rn}", C_NE[0] + 27, ry + 4, size=9, tooltip="Exotic")
 
         for col, lbl in [
             (C_OBL,  "OBL"),
@@ -276,11 +266,21 @@ def build_veg_form(path):
 
         checkbox(c, f"inv_y_{rn}", C_INV[0] + 4,  ry + 4, size=9, tooltip="Invasive Yes")
         checkbox(c, f"inv_n_{rn}", C_INV[0] + 17, ry + 4, size=9, tooltip="Invasive No")
-        checkbox(c, f"nox_y_{rn}", C_NOX[0] + 4,  ry + 4, size=9, tooltip="Noxious Yes")
-        checkbox(c, f"nox_n_{rn}", C_NOX[0] + 17, ry + 4, size=9, tooltip="Noxious No")
 
         text_field(c, f"notes_{rn}", C_NOT[0] + 1, ry + 2,
                    C_NOT[1] - 2, ROW_H - 4, tooltip=f"Notes row {r+1}")
+
+    # Vertical dividers between the major species-table categories, drawn
+    # once across the full data row block so the eye can find each column
+    # without having to scan back up to the header.
+    c.saveState()
+    c.setStrokeColor(GRID_COLOR)
+    c.setLineWidth(0.5)
+    div_top = row_top
+    div_bot = row_top - N_ROWS * ROW_H
+    for x in (C_T[0], C_COV[0], C_OBL[0], C_INV[0], C_NOT[0]):
+        c.line(x, div_bot, x, div_top)
+    c.restoreState()
 
     # ── Vegetation Summary ────────────────────────────────────────────────────
     VS_BAR = 13
@@ -318,33 +318,16 @@ def build_veg_form(path):
         checkbox(c, nm, wx + ox, vs_a + 4, size=9, tooltip=lbl)
         draw_text(c, wx + ox + 11, vs_a + 8, lbl, FONT_TINY)
 
-    # Row B — AWIDD dominance test
-    vs_b = vs_a - VS_ROW
-    cell_rect(c, MARGIN_L, vs_b, USABLE_W, VS_ROW, fill=colors.white)
-    draw_text(c, MARGIN_L + 2, vs_b + 10,
-              "Dominance Test (AWIDD §50/20 rule):  OBL+FACW+FAC dominant spp:",
-              FONT_LABEL)
-    text_field(c, "dom_obl_facw_fac", MARGIN_L + 240, vs_b + 2, 24, VS_ROW - 5,
-               tooltip="Count of OBL+FACW+FAC dominant species")
-    draw_text(c, MARGIN_L + 268, vs_b + 10, "of", FONT_LABEL)
-    text_field(c, "dom_total_spp", MARGIN_L + 280, vs_b + 2, 24, VS_ROW - 5,
-               tooltip="Total dominant species counted")
-    draw_text(c, MARGIN_L + 308, vs_b + 10, "dominant   Criterion:", FONT_LABEL)
-    checkbox(c, "dom_met",      MARGIN_L + 382, vs_b + 4, size=9, tooltip="Met")
-    draw_text(c, MARGIN_L + 393, vs_b + 8, "Met", FONT_TINY)
-    checkbox(c, "dom_not_met",  MARGIN_L + 410, vs_b + 4, size=9, tooltip="Not Met")
-    draw_text(c, MARGIN_L + 421, vs_b + 8, "Not met", FONT_TINY)
-    checkbox(c, "dom_marginal", MARGIN_L + 452, vs_b + 4, size=9, tooltip="Marginal")
-    draw_text(c, MARGIN_L + 463, vs_b + 8, "Marginal", FONT_TINY)
-    draw_text(c, MARGIN_L + 506, vs_b + 10,
-              "(see AWIDD s.4.3 for FAC-neutral test if marginal)", FONT_TINY,
-              colors.HexColor("#555555"))
+    # Dominance Test row dropped — redundant with the Determination checkboxes
+    # in the row above. The dom_criterion field is retained in the Excel data
+    # entry template so field technicians can record the AWIDD §50/20 outcome
+    # in writing if they want to.
 
     # ── Ecosite Classification ────────────────────────────────────────────────
     ECO_BAR = 13
     ECO_HDR = 12
     ECO_ROW = 16
-    eco_top = vs_b - 2
+    eco_top = vs_a - 2
 
     cell_rect(c, MARGIN_L, eco_top - ECO_BAR, USABLE_W, ECO_BAR, fill=TITLE_BG)
     draw_text(c, MARGIN_L + 4, eco_top - ECO_BAR + 4,
@@ -445,6 +428,19 @@ def build_veg_form(path):
         draw_text(c, ox + 10, ry_a + 8, lbl, FONT_TINY)
         ox += step
 
+    # In-situ water chemistry (multi-probe readings collected at the plot).
+    ax = MARGIN_L + 510
+    for lbl, nm, label_w, field_w, gap in [
+        ("pH:",   "hydro_ph",   12, 28, 8),
+        ("EC:",   "hydro_ec",   12, 38, 8),
+        ("ppm:",  "hydro_ppm",  16, 38, 8),
+        ("Temp:", "hydro_temp", 22, 30, 0),
+    ]:
+        draw_text(c, ax, ry_a + 10, lbl, FONT_LABEL)
+        text_field(c, nm, ax + label_w, ry_a + 2, field_w, HY_ROW - 4,
+                   tooltip=lbl.rstrip(":"))
+        ax += label_w + field_w + gap
+
     # Row B — inundation / saturation indicators, two lines (merged from former Row B2)
     HY_ROW_B = 28
     ry_b = ry_a - HY_ROW_B
@@ -488,13 +484,15 @@ def build_veg_form(path):
     draw_text(c, MARGIN_L + 2, ry_c + 10, "Permanence class (GWPWB):", FONT_LABEL)
     px = MARGIN_L + 114
     for lbl, nm, step in [
-        ("Ephemeral (<2 mo)",      "ephemeral",   120),
-        ("Intermittent (2–5 mo)",  "intermittent", 116),
-        ("Semi-permanent (>5 mo)", "semi_perm",   128),
-        ("Permanent (year-round)", "permanent",   122),
+        ("Ephemeral < 7 days",          "ephemeral",    85),
+        ("Temporary (1 - 4 wk)",        "temporary",    92),
+        ("Seasonal (5-17 wk)",          "seasonal",     84),
+        ("Semi-Permanent (18 - 40 wk)", "semi_perm",   120),
+        ("Intermittent (41 - 51 wk)",   "int_exposed", 112),
+        ("Permanent (52 wk)",           "permanent",     0),
     ]:
         checkbox(c, f"perm_{nm}", px, ry_c + 4, size=8, tooltip=lbl)
-        draw_text(c, px + 10, ry_c + 8, lbl, FONT_TINY)
+        draw_text(c, px + 10, ry_c + 8, lbl, FONT_FIELD)
         px += step
 
     # ── Remarks (combined hydrology notes + general remarks) ─────────────────
@@ -582,8 +580,11 @@ def build_soils_form(path):
 
     # ── Column definitions ────────────────────────────────────────────────────
     # Total must equal USABLE_W = 756 pts.
-    # Redox column removed; freed 90 pts redistributed to Texture (+36), Structure (+20),
-    # and Mottles (+34) so those columns have more room rather than expanding Notes.
+    # History: Redox column removed (freed 90 pts → Texture +36, Structure +20,
+    # Mottles +34); Material column removed (freed 72 pts → Coarse Frags +10
+    # so "Coarse" fits at the larger header font, Notes +62 for transcribable room).
+    # Peat/Muck/Min material is inferable from the horizon code and Von Post
+    # score; record it in Notes if the field call differs from the obvious read.
     cols = [
         (MARGIN_L,       28,  "Horiz."),
         (MARGIN_L + 28,  28,  "Top\n(cm)"),
@@ -591,13 +592,12 @@ def build_soils_form(path):
         (MARGIN_L + 84,  34,  "Munsell\nHue"),
         (MARGIN_L + 118, 22,  "Val."),
         (MARGIN_L + 140, 22,  "Chr."),
-        (MARGIN_L + 162, 144, "Texture"),       # 12 mineral classes (was 108)
-        (MARGIN_L + 306, 75,  "Structure"),      # PL BK SBK PR MA (was 55)
+        (MARGIN_L + 162, 144, "Texture"),        # 12 mineral classes
+        (MARGIN_L + 306, 75,  "Structure"),       # PL BK SBK PR MA
         (MARGIN_L + 381, 26,  "Von\nPost"),
-        (MARGIN_L + 407, 72,  "Material"),
-        (MARGIN_L + 479, 22,  "Coarse\nFrags"),
-        (MARGIN_L + 501, 124, "Mottles"),        # Abund + Contrast + Colour (was 90; Redox removed)
-        (MARGIN_L + 625, 131, "Notes"),
+        (MARGIN_L + 407, 32,  "Coarse\nFrags"),
+        (MARGIN_L + 439, 124, "Mottles"),         # Abund + Size + Contrast
+        (MARGIN_L + 563, 193, "Notes"),
     ]
 
     chy = H - 90
@@ -607,8 +607,8 @@ def build_soils_form(path):
         cell_rect(c, cx, chy - 22, cw, 22, fill=TITLE_BG)
         lines = clabel.split("\n")
         for li, line in enumerate(lines):
-            draw_text(c, cx + cw / 2, chy - 9 - li * 8, line,
-                      ("Helvetica-Bold", 5), colors.white, align="center")
+            draw_text(c, cx + cw / 2, chy - 9 - li * 9, line,
+                      ("Helvetica-Bold", 8), colors.white, align="center")
 
     shy = chy - 22
     # Increased from 12 to 20 to fit two-row sub-header for Mottles/Redox
@@ -632,16 +632,8 @@ def build_soils_form(path):
         draw_text(c, sx0 + i * sw + sw / 2, shy - sub_h + 7, lbl,
                   ("Helvetica", 4), align="center")
 
-    # Material: Min Peat Muck Marl
-    mat_labels = ["Min", "Peat", "Muck", "Marl"]
-    mx0 = cols[9][0]
-    mw = cols[9][1] / len(mat_labels)
-    for i, lbl in enumerate(mat_labels):
-        draw_text(c, mx0 + i * mw + mw / 2, shy - sub_h + 7, lbl,
-                  ("Helvetica", 4), align="center")
-
-    # Coarse Frags: Y / N
-    cf_x, cf_w = cols[10][0], cols[10][1]
+    # Coarse Frags: Y / N  (Material column removed — index shifted from 10 to 9)
+    cf_x, cf_w = cols[9][0], cols[9][1]
     draw_text(c, cf_x + cf_w * 0.25, shy - sub_h + 7, "Y", ("Helvetica", 4), align="center")
     draw_text(c, cf_x + cf_w * 0.75, shy - sub_h + 7, "N", ("Helvetica", 4), align="center")
 
@@ -658,7 +650,7 @@ def build_soils_form(path):
     mot_contr_w = 38   # 3 contrast checkboxes
     mot_size_w   = 38   # Munsell size checkboxes
 
-    for ci in [11]:
+    for ci in [10]:
         cx0 = cols[ci][0]
         cw0 = cols[ci][1]
 
@@ -703,7 +695,7 @@ def build_soils_form(path):
 
         rn = f"{r+1:02d}"
 
-        # Text fields — standard columns (Notes is now at index 13)
+        # Text fields — standard columns (Material removed, Notes now at index 11)
         for ci, fname, tip in [
             (0,  f"horizon_{rn}",     "Horizon code"),
             (1,  f"depth_top_{rn}",   "Depth top (cm)"),
@@ -712,7 +704,7 @@ def build_soils_form(path):
             (4,  f"munsell_val_{rn}", "Munsell Value"),
             (5,  f"munsell_chr_{rn}", "Munsell Chroma"),
             (8,  f"von_post_{rn}",    "Von Post (H1-H10)"),
-            (12, f"s_notes_{rn}",     "Notes"),
+            (11, f"s_notes_{rn}",     "Notes"),
         ]:
             cx, cw, _ = cols[ci]
             text_field(c, fname, cx + 1, ry + 2, cw - 2, ROW_H - 4, tooltip=tip)
@@ -731,19 +723,12 @@ def build_soils_form(path):
             checkbox(c, f"str_{lbl.lower()}_{rn}", sx0 + i * sw + 1, ry + 6,
                      size=9, tooltip=f"Structure {lbl}")
 
-        # Material checkboxes
-        mx0 = cols[9][0]
-        mw = cols[9][1] / len(mat_labels)
-        for i, lbl in enumerate(mat_labels):
-            checkbox(c, f"mat_{lbl.lower()}_{rn}", mx0 + i * mw + 1, ry + 6,
-                     size=9, tooltip=f"Material {lbl}")
-
         # Coarse Frags Y/N (replaces GR in Structure)
         checkbox(c, f"cf_y_{rn}", cf_x + 1,        ry + 6, size=9, tooltip="Coarse Fragments present")
         checkbox(c, f"cf_n_{rn}", cf_x + cf_w / 2, ry + 6, size=9, tooltip="Coarse Fragments absent")
 
-        # Mottles: abundance (4) + size  + contrast (3)
-        mot_x = cols[11][0]
+        # Mottles: abundance (4) + size  + contrast (3) — index shifted from 11 to 10
+        mot_x = cols[10][0]
         for i, lbl in enumerate(["none", "few", "common", "many"]):
             checkbox(c, f"mot_{lbl}_{rn}", mot_x + i * 9 + 1, ry + 6,
                      size=9, tooltip=f"Mottles {lbl}")

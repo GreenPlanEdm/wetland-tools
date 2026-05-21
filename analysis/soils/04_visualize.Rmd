@@ -57,7 +57,7 @@ for (p in plots) print(p)
 
 ```{r fig-peat-vonpost}
 p_vp <- soils |>
-  filter(material_type == "peat") |>
+  filter(material_type %in% c("peat", "muck")) |>
   ggplot(aes(x = plot_id,
              ymin = -depth_bot_cm, ymax = -depth_top_cm,
              fill = von_post)) +

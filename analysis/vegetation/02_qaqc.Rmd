@@ -19,21 +19,41 @@ library(here)
 ```{r load}
 veg <- readRDS(here("data-raw", paste0(params$project_id, "_veg_ingested.rds")))
 load(here("data", "wetland_indicator_status.rda"))
+load(here("data", "awcs_wetland_species.rda"))
 load(here("data", "invasive_species.rda"))
 load(here("data", "anpc_wetland_species.rda"))
 ```
 
-## Flag: unrecognised species codes
+## Flag: species not in reference tables
+
+A species must resolve in the two reference tables that `03_transform.Rmd` joins
+against — `awcs_wetland_species` (by `spp_code`, for AWCS class assignment) and
+`wetland_indicator_status` (by `scientific_name`, for the regional wetland
+indicator status that drives the WIDD dominance test). Anything missing from
+either is flagged here so the field crew can correct the record or extend the
+reference table before transform runs.
 
 ```{r flag-species}
-known_species <- bind_rows(
-  wetland_indicator_status |> select(species_code),
-  anpc_wetland_species     |> select(species_code)
-) |> distinct()
+norm <- function(x) toupper(trimws(x))
+
+known_spp_codes <- norm(awcs_wetland_species$spp_code)
+known_sci_names <- norm(wetland_indicator_status$scientific_name)
 
 veg_flag_species <- veg |>
-  anti_join(known_species, by = "species_code") |>
-  mutate(flag = "UNRECOGNISED_SPECIES")
+  mutate(
+    code_in_awcs = norm(species_code)    %in% known_spp_codes,
+    name_in_wi   = norm(scientific_name) %in% known_sci_names
+  ) |>
+  filter(!code_in_awcs | !name_in_wi) |>
+  mutate(
+    flag = "UNRECOGNISED_SPECIES",
+    missing_in = dplyr::case_when(
+      !code_in_awcs & !name_in_wi ~ "AWCS + WI list",
+      !code_in_awcs               ~ "AWCS list (data/awcs_wetland_species.rda)",
+      !name_in_wi                 ~ "WI list (ABWetlandPlantList_2021.csv)"
+    )
+  ) |>
+  select(-code_in_awcs, -name_in_wi)
 
 veg_flag_species
 ```

@@ -136,6 +136,7 @@ veg <- veg |>
   left_join(
     awcs_wetland_species |> select(
       scientific_name,
+      common_name,
       awcs_indicator,
       indicator_strength,
       class_bog, class_fen, class_swamp, class_marsh, class_shallow_open_water

@@ -38,17 +38,52 @@ soils <- soils |>
   left_join(von_post, by = c("von_post" = "von_post_code"))
 ```
 
+## Derive material type from horizon code and Von Post score
+
+Material classification (peat / muck / marl / min) was previously a separate
+checkbox on the soils field form. It has been moved into derivation here so
+the field crew records only what they observe directly — the master horizon
+letter from the CSSC code and the Von Post humification score — and the
+wetland-relevant material call follows from those by rule:
+
+  - Organic master horizon (O) + Von Post H1–H7  → `peat` (fibric / mesic)
+  - Organic master horizon (O) + Von Post H8–H10 → `muck` (humic / well-decomposed)
+  - "marl" mentioned anywhere in horizon notes   → `marl` (CaCO3 precipitate;
+                                                          not derivable from code)
+  - Everything else                              → `min`  (mineral horizon)
+
+If the field crew identifies marl or another non-rule-following material,
+they record it in the horizon's notes column and this block picks it up.
+The derivation runs before the peat-grade classification so downstream blocks
+can rely on `material_type` being populated for every row.
+
+```{r derive-material}
+soils <- soils |>
+  mutate(
+    horizon_master = toupper(stringr::str_extract(horizon_code, "^[A-Za-z]+")),
+    material_type  = dplyr::case_when(
+      grepl("marl", notes, ignore.case = TRUE)                         ~ "marl",
+      startsWith(horizon_master, "O") & von_post %in% paste0("H", 8:10) ~ "muck",
+      startsWith(horizon_master, "O")                                   ~ "peat",
+      TRUE                                                              ~ "min"
+    )
+  )
+```
+
 ## Classify peat horizons — retail vs professional grade
 
 ```{r classify-peat}
-# Professional peat: Von Post H1–H4 (fibric to hemic)
-# Retail peat:       Von Post H5–H10 (mesic to sapric)
-# Source: industry convention; refine against project-specific criteria
+# Professional peat:        Von Post H1–H4  (fibric to hemic — premium horticultural grade)
+# Retail peat:              Von Post H5–H6  (mesic — commercial / bagged garden grade)
+# Not commercially viable:  Von Post H7–H10 (heavily decomposed; muck) — peat_grade = NA
+# Muck horizons enter peat_thickness accounting (they are still peat material), but
+# no commercial grade is assigned because they are not harvestable as product.
+# Source: industry convention; refine against project-specific criteria.
 soils <- soils |>
   mutate(
     peat_grade = case_when(
-      material_type == "peat" & von_post %in% paste0("H", 1:4) ~ "Professional",
-      material_type == "peat" & von_post %in% paste0("H", 5:10) ~ "Retail",
+      material_type %in% c("peat", "muck") & von_post %in% paste0("H", 1:4) ~ "Professional",
+      material_type %in% c("peat", "muck") & von_post %in% paste0("H", 5:6) ~ "Retail",
       TRUE ~ NA_character_
     )
   )
@@ -58,7 +93,7 @@ soils <- soils |>
 
 ```{r peat-thickness}
 peat_summary <- soils |>
-  filter(material_type == "peat") |>
+  filter(material_type %in% c("peat", "muck")) |>
   group_by(plot_id, peat_grade) |>
   summarise(thickness_cm = sum(depth_bot_cm - depth_top_cm, na.rm = TRUE),
             .groups = "drop")

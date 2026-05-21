@@ -49,6 +49,8 @@ plots_cols <- c(
   "awcs_class_obs", "photos_taken", "photo_numbers", "weather",
   # Hydrology — water presence
   "water_present", "water_depth_cm", "outlet",
+  # Hydrology — in-situ water chemistry (multi-probe readings)
+  "hydro_ph", "hydro_ec", "hydro_ppm", "hydro_temp",
   # Hydrology — inundation / saturation indicators (11 columns)
   "ind_watermarks", "ind_water_stained", "ind_oxidized_rhizo",
   "ind_saturation", "ind_iron_deposits", "ind_algal_mats",
@@ -89,6 +91,10 @@ eg_plots <- data.frame(
   water_present      = "TRUE",
   water_depth_cm     = "12",
   outlet             = "Surface",
+  hydro_ph           = "7.2",
+  hydro_ec           = "850",
+  hydro_ppm          = "420",
+  hydro_temp         = "14.5",
   ind_watermarks     = "TRUE",
   ind_water_stained  = "FALSE",
   ind_oxidized_rhizo = "TRUE",
@@ -126,7 +132,12 @@ for (nm in c("ind_watermarks",    "ind_water_stained", "ind_oxidized_rhizo",
 }
 
 dv_list("plots", ci["permanence_class"],
-        c("Ephemeral", "Intermittent", "Semi-permanent", "Permanent"))
+        c("Ephemeral < 7 days",
+          "Temporary (1 - 4 wk)",
+          "Seasonal (5-17 wk)",
+          "Semi-Permanent (18 - 40 wk)",
+          "Intermittent (41 - 51 wk)",
+          "Permanent (52 wk)"))
 dv_list("plots", ci["determination"], c("Wetland", "Non-wetland", "Inconclusive"))
 dv_list("plots", ci["dom_criterion"], c("Met", "Not met", "Marginal"))
 dv_list("plots", ci["structural_stage"], as.character(1:7))
@@ -136,6 +147,20 @@ dataValidation(wb, "plots",
   cols = ci["water_depth_cm"], rows = DATA_ROWS,
   type = "decimal", operator = "greaterThanOrEqual", value = "0"
 )
+dataValidation(wb, "plots",
+  cols = ci["hydro_ph"], rows = DATA_ROWS,
+  type = "decimal", operator = "between", value = c("0", "14")
+)
+for (nm in c("hydro_ec", "hydro_ppm")) {
+  dataValidation(wb, "plots",
+    cols = ci[nm], rows = DATA_ROWS,
+    type = "decimal", operator = "greaterThanOrEqual", value = "0"
+  )
+}
+dataValidation(wb, "plots",
+  cols = ci["hydro_temp"], rows = DATA_ROWS,
+  type = "decimal", operator = "between", value = c("-10", "40")
+)
 
 # ── Column widths ─────────────────────────────────────────────────────────────
 widths_p <- c(
@@ -143,6 +168,7 @@ widths_p <- c(
   date = 12, gps_e = 12, gps_n = 12, datum = 9,
   awcs_class_obs = 22, photos_taken = 9, photo_numbers = 12, weather = 16,
   water_present = 10, water_depth_cm = 10, outlet = 12,
+  hydro_ph = 7, hydro_ec = 8, hydro_ppm = 8, hydro_temp = 8,
   ind_watermarks = 10, ind_water_stained = 10, ind_oxidized_rhizo = 10,
   ind_saturation = 10, ind_iron_deposits = 10, ind_algal_mats = 10,
   ind_salt_crust = 10, ind_stunted_plants = 10, ind_marl_deposits = 10,
@@ -166,7 +192,7 @@ addStyle(wb, "plots", s_eg,  rows = 2, cols = seq_len(n_p), gridExpand = TRUE)
 addWorksheet(wb, "species", tabColour = "#4A7C59", gridLines = TRUE)
 
 species_cols <- c("plot_id", "spp_code", "spp_name",
-                  "stratum", "pct_cover", "native_exotic", "notes")
+                  "stratum", "pct_cover", "invasive", "notes")
 n_s  <- length(species_cols)
 ci_s <- setNames(seq_len(n_s), species_cols)
 
@@ -176,25 +202,25 @@ writeData(wb, "species",
 )
 
 eg_species <- data.frame(
-  plot_id       = "P-01",
-  spp_code      = "TYPH.LATI",
-  spp_name      = "Typha latifolia",
-  stratum       = "G",
-  pct_cover     = "30",
-  native_exotic = "N",
-  notes         = ""
+  plot_id   = "P-01",
+  spp_code  = "TYPH.LATI",
+  spp_name  = "Typha latifolia",
+  stratum   = "G",
+  pct_cover = "30",
+  invasive  = "N",
+  notes     = ""
 )
 writeData(wb, "species", eg_species, startRow = 2, colNames = FALSE)
 
-dv_list("species", ci_s["stratum"],       c("T", "S", "G", "M"))
-dv_list("species", ci_s["native_exotic"], c("N", "E"))
+dv_list("species", ci_s["stratum"],  c("T", "S", "G"))
+dv_list("species", ci_s["invasive"], c("Y", "N"))
 dataValidation(wb, "species",
   cols = ci_s["pct_cover"], rows = DATA_ROWS,
   type = "decimal", operator = "between", value = c("0", "100")
 )
 
 setColWidths(wb, "species",
-  cols = seq_len(n_s), widths = c(12, 14, 28, 8, 10, 12, 30))
+  cols = seq_len(n_s), widths = c(12, 14, 28, 8, 10, 10, 30))
 setRowHeights(wb, "species", rows = 1, heights = 30)
 freezePane(wb, "species", firstActiveRow = 2, firstActiveCol = 1)
 
@@ -217,17 +243,20 @@ readme <- as.data.frame(rbind(
   c("DO NOT TRANSCRIBE",
     paste("The following are computed by R from the species list and reference tables",
           "and must NOT be entered here:",
-          "WI Status per species (OBL / FACW / FAC / FACU / UPL / NL),",
-          "Invasive (Y/N) and Noxious (Y/N) per species,",
+          "Native / Exotic origin and Noxious status (looked up from ANPC native list",
+          "and Alberta noxious weeds reference table in 03_transform.Rmd),",
           "Vegetation Summary counts (sum_obl ... sum_total),",
-          "and Dominance Test counts (dom_obl_facw_fac, dom_total_spp).")),
+          "and Dominance Test counts (dom_obl_facw_fac, dom_total_spp).",
+          "Invasive is transcribed because the field crew is asked to flag suspected",
+          "infestations on the form for mapping purposes.")),
   c("plots — columns",
     paste("plot_id: primary key (must match species sheet) |",
           "date: YYYY-MM-DD |",
           "datum: NAD83 or WGS84 |",
           "outlet: None / Surface / Subsurface / Both |",
+          "hydro_ph / hydro_ec (uS/cm) / hydro_ppm (TDS) / hydro_temp (degC): in-situ multi-probe readings, leave blank if not measured |",
           "ind_*: TRUE if indicator was observed, FALSE if not (11 indicator columns) |",
-          "permanence_class: Ephemeral / Intermittent / Semi-permanent / Permanent (per GWPWB) |",
+          "permanence_class (per GWPWB): Ephemeral <7d / Temporary (1-4 wk) / Seasonal (5-17 wk) / Semi-Permanent (18-40 wk) / Intermittent (41-51 wk) / Permanent (52 wk) |",
           "determination: Wetland / Non-wetland / Inconclusive |",
           "dom_criterion: Met / Not met / Marginal |",
           "remarks: combined hydrology notes and general observations")),
@@ -235,8 +264,9 @@ readme <- as.data.frame(rbind(
     paste("plot_id: foreign key matching plots sheet |",
           "spp_code: ACIMS-style code (4-letter genus + '.' + 4-letter epithet, e.g. TYPH.LATI for Typha latifolia) — must match the spp_code column in the awcs_wetland_species reference table (data/awcs_wetland_species.rda) |",
           "spp_name: scientific name (optional — R looks up from reference table) |",
-          "stratum: T (tree >10 m) / S (shrub >5 m) / G (ground 1x1 m) / M (moss 1x1 m) |",
-          "native_exotic: N (native) or E (exotic/introduced)")),
+          "stratum: T (tree >10 m) / S (shrub >5 m) / G (ground 1x1 m) |",
+          "invasive: Y if the field crew flagged a suspected infestation, N otherwise (canonical invasive status is still derived from aisc_invasive_plants in 03_transform.Rmd) |",
+          "notes: free text")),
   c("SPECIES CODES",
     paste("Codes follow the ACIMS (Alberta Centre for Information on Alberta Species) binomial convention:",
           "first 4 letters of genus + '.' + first 4 letters of specific epithet, all uppercase (e.g. CARE.AQUA, TYPH.LATI, SALI.EXIG).",
