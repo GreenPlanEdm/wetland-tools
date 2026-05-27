@@ -326,16 +326,17 @@ usethis::use_data(cssc_great_groups, overwrite = TRUE)
 
 # Von Post peat humification scale (H1–H10)
 # Source: Von Post (1922); standard as used in Canadian peat assessment.
-# Raw CSV has merged-cell headers from Excel export; data values are at
-# column positions 1, 6, 10, 15, 20 (degree, liquid, extruded, plant matter, description).
+# CSV is a clean 5-column table: degree, liquid, extruded, plant matter,
+# description. (Earlier exports had merged-cell padding columns that have
+# since been normalised away.)
 von_post_raw <- read.csv(here("data-raw", "Van_Post_List.csv"),
                           check.names = FALSE, stringsAsFactors = FALSE)
 von_post <- data.frame(
   von_post_code = paste0("H", trimws(von_post_raw[[1]])),
-  liquid        = trimws(von_post_raw[[6]]),
-  extruded      = trimws(von_post_raw[[10]]),
-  plant_matter  = trimws(von_post_raw[[15]]),
-  description   = trimws(von_post_raw[[20]]),
+  liquid        = trimws(von_post_raw[[2]]),
+  extruded      = trimws(von_post_raw[[3]]),
+  plant_matter  = trimws(von_post_raw[[4]]),
+  description   = trimws(von_post_raw[[5]]),
   stringsAsFactors = FALSE
 )
 usethis::use_data(von_post, overwrite = TRUE)
