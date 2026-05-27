@@ -88,9 +88,12 @@ data-raw/*.csv
 !data-raw/noxious_weeds_ab.csv
 !data-raw/nrc_geography_usace.csv
 !data-raw/aisc_invasive_plants.csv
+!data-raw/species_salinity_tolerance.csv
+!data-raw/references.csv
 
 !data-raw/build_reference_data.R
 !data-raw/extract_aisc_invasive_plants.R
+!data-raw/extract_salinity_tolerance.R
 
 # IDE and editor directories
 .idea/

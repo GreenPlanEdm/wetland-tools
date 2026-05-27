@@ -1,0 +1,58 @@
+species_latin,species_common,wi_status,salinity_range,most_saline,native_status,lookup_source_id,n_observations
+Agrostis scabra,rough hair grass,FAC,Unknown,Unknown,Native,anpc_2023,1
+Alopecurus aequalis,Short awned foxtail,OBL,slightly brackish - moderately brackish,moderately brackish,Native,anpc_2023,1
+Atriplex prostrata,prostrate saltbush,FAC,freshwater - slightly brackish,slightly brackish,Exotic,anpc_2023,1
+Avena fatua,Wild oat,,freshwater - moderately brackish,moderately brackish,Exotic,anpc_2023,1
+Avena sativa,cultivated oat,UPL,Unknown,Unknown,Exotic,anpc_2023,1
+Beckmannia syzigachne,Slough grass,OBL,brackish,brackish,Native,anpc_2023,6
+Brassica napus,canola,,Unknown,Unknown,Exotic,anpc_2023,9
+Brassica rapa,field mustard,UPL,Unknown,Unknown,Exotic,anpc_2023,2
+Bromus inermis,smooth brome,UPL,Unknown,Unknown,Exotic,anpc_2023,3
+Calamagrostis canadensis,marsh reed grass,OBL,Unknown,Unknown,Native,anpc_2023,2
+Capsella bursa-pastoris,shepherds purse,FACU,Unknown,Unknown,Exotic,anpc_2023,1
+Carex atherodes,Awned sedge,OBL,slightly brackish - moderately brackish,moderately brackish,Native,anpc_2023,3
+Chamerion angustifolium,fireweed,FAC,Unknown,Unknown,Native,anpc_2023,1
+Chenopodium album,lambs-quarters,FACU,Unknown,Unknown,Exotic,anpc_2023,5
+Chenopodium salinum,Oak-leaved goosefoot,FAC,freshwater - slightly brackish,slightly brackish,Native,anpc_2023,3
+Cirsium arvense,creeping thistle,FACU,freshwater - moderately brackish,moderately brackish,Exotic,anpc_2023,20
+Eleocharis mamillata,Spike rush,OBL,freshwater - slightly brackish,slightly brackish,Native,anpc_2023,1
+Elymus albicans,awned wheatgrass,,Unknown,Unknown,Native,anpc_2023,1
+Elymus canadensis,Perennial wild rye,M*,freshwater - moderately brackish,moderately brackish,Native,goa_2016,2
+Elymus glaucus,Wild rye,FACU,freshwater,freshwater,Native,anpc_2023,2
+Elymus smithii,Western wheatgrass,FACU,moderately brackish,moderately brackish,Unknown,,1
+Elymus trachycaulus,Slender wheat grass,FACU,slightly brackish - moderately brackish,moderately brackish,Native,anpc_2023,1
+Equisetum pratense,meadow horsetail,FACW,freshwater - slightly brackish,slightly brackish,Native,anpc_2023,2
+Fallopia convolvulus,buckwheat,FACU,Unknown,Unknown,Exotic,anpc_2023,3
+Galium boreale,northern bedstraw,FAC,Unknown,Unknown,Native,anpc_2023,1
+Hordeum jubatum,Foxtail barley,FAC,slightly brackish - brackish,brackish,Native,anpc_2023,8
+Juncus balticus,Wire rush,OBL,freshwater - brackish,brackish,Native,anpc_2023,4
+Juncus compressus,round fruit rush,,Unknown,Unknown,Unknown,,1
+Linaria vulgaris,toadflax,,Unknown,Unknown,Exotic,anpc_2023,5
+Lolium perenne,Perennial ryegrass,FACU,freshwater - moderately brackish,moderately brackish,Exotic,anpc_2023,2
+Mentha arvensis,Wild mint,FACW,freshwater,freshwater,Native,anpc_2023,3
+Panicum virgatum,Switchgrass,FAC,freshwater - moderately brackish,moderately brackish,Native,goa_2016,2
+Persicaria amphibia,Water smartweed,OBL,freshwater,freshwater,Native,anpc_2023,1
+Phalaris arundinacea,reed canary grass,FACW,Unknown,Unknown,Native,anpc_2023,3
+Plantago major,plantain,FACU,freshwater,freshwater,Exotic,anpc_2023,4
+Poa pratensis,Kentucky Bluegrass,FACU,freshwater,freshwater,Native,anpc_2023,1
+Populus balsamifera,balsam poplar,FACW,Unknown,Unknown,Native,anpc_2023,4
+Populus tremuloides,trembling aspen,FACU,Unknown,Unknown,Native,anpc_2023,3
+Rorippa sylvestris,creeping yellow cress,OBL,Unknown,Unknown,Exotic,anpc_2023,1
+Rosa acicularis,prickly rose,FACU,Unknown,Unknown,Native,anpc_2023,1
+Rumex crispus,Yellow Dock,FAC,freshwater - slightly brackish,slightly brackish,Exotic,anpc_2023,1
+Rumex fueginus,golden dock,FACW,Unknown,Unknown,Native,anpc_2023,2
+Salix discolor,pussy willow,FACW,Unknown,Unknown,Native,anpc_2023,1
+Salix interior,sandbar willow,FACW,Unknown,Unknown,Native,anpc_2023,1
+Salix serissima,autumn willow,OBL,Unknown,Unknown,Native,anpc_2023,1
+Schoenoplectus acutus,giant bulrush,OBL,Unknown,Unknown,Native,anpc_2023,2
+Schoenoplectus tabernaemontani,Common great bulrush,OBL,slightly brackish - brackish,brackish,Native,anpc_2023,2
+Scutellaria galericulata,marsh skullcap,OBL,Unknown,Unknown,Native,anpc_2023,2
+Setaria viridis,bottle grass,,Unknown,Unknown,Exotic,anpc_2023,2
+Silene latifolia,white campion,,Unknown,Unknown,Exotic,anpc_2023,1
+Sonchus arvensis,Perennial sowthistle,FACU,freshwater - moderately brackish,moderately brackish,Exotic,anpc_2023,7
+Sonchus asper,prickly sow-thistle,FACU,Unknown,Unknown,Exotic,anpc_2023,5
+Tanacetum vulgare,tansy,FACU,Unknown,Unknown,Exotic,anpc_2023,2
+Triglochin maritima,Seaside arrowgrass,OBL,freshwater - brackish,brackish,Native,anpc_2023,1
+Triticum aestivum,wheat,,freshwater - moderately brackish,moderately brackish,Exotic,anpc_2023,10
+Typha latifolia,Common cattail,OBL,freshwater,freshwater,Native,anpc_2023,13
+Urtica dioica,Stinging nettle,FAC,freshwater,freshwater,Native,anpc_2023,1
