@@ -1,58 +1,58 @@
-species_latin,species_common,salinity_range,most_saline,provenance
-Agrostis scabra,rough hair grass,slightly brackish,slightly brackish,v1.2_curated
-Alopecurus aequalis,Short awned foxtail,slightly brackish - moderately brackish,moderately brackish,starter
-Atriplex prostrata,prostrate saltbush,freshwater - slightly brackish,slightly brackish,starter
-Avena fatua,Wild oat,freshwater - moderately brackish,moderately brackish,starter
-Avena sativa,cultivated oat,freshwater,freshwater,v1.2_curated
-Beckmannia syzigachne,Slough grass,brackish,brackish,starter
-Brassica napus,canola,moderately brackish,moderately brackish,v1.2_curated
-Brassica rapa,field mustard,moderately brackish,moderately brackish,v1.2_curated
-Bromus inermis,smooth brome,moderately brackish,moderately brackish,v1.2_curated
-Calamagrostis canadensis,marsh reed grass,slightly brackish,slightly brackish,v1.2_curated
-Capsella bursa-pastoris,shepherds purse,slightly brackish,slightly brackish,v1.2_curated
-Carex atherodes,Awned sedge,slightly brackish,slightly brackish,v1.2_curated
-Chamerion angustifolium,fireweed,freshwater,freshwater,v1.2_curated
-Chenopodium album,lambs-quarters,brackish,brackish,v1.2_curated
-Chenopodium salinum,Oak-leaved goosefoot,freshwater - slightly brackish,slightly brackish,starter
-Cirsium arvense,creeping thistle,freshwater - moderately brackish,moderately brackish,v1.2_curated
-Eleocharis mamillata,Spike rush,freshwater - slightly brackish,slightly brackish,starter
-Elymus albicans,awned wheatgrass,freshwater,freshwater,v1.2_curated
-Elymus canadensis,Perennial wild rye,freshwater - moderately brackish,moderately brackish,starter
-Elymus glaucus,Wild rye,freshwater,freshwater,starter
-Elymus smithii,Western wheatgrass,moderately brackish,moderately brackish,starter
-Elymus trachycaulus,Slender wheat grass,slightly brackish - moderately brackish,moderately brackish,starter
-Equisetum pratense,meadow horsetail,freshwater - slightly brackish,slightly brackish,starter
-Fallopia convolvulus,buckwheat,freshwater,freshwater,v1.2_curated
-Galium boreale,northern bedstraw,freshwater,freshwater,v1.2_curated
-Hordeum jubatum,Foxtail barley,slightly brackish - brackish,brackish,v1.2_curated
-Juncus balticus,Wire rush,freshwater - brackish,brackish,starter
-Juncus compressus,round fruit rush,slightly brackish,slightly brackish,v1.2_curated
-Linaria vulgaris,toadflax,slightly brackish,slightly brackish,v1.2_curated
-Lolium perenne,Perennial ryegrass,freshwater - moderately brackish,moderately brackish,starter
-Mentha arvensis,Wild mint,freshwater,freshwater,starter
-Panicum virgatum,Switchgrass,freshwater - moderately brackish,moderately brackish,starter
-Persicaria amphibia,Water smartweed,freshwater,freshwater,starter
-Phalaris arundinacea,reed canary grass,moderately brackish,moderately brackish,v1.2_curated
-Plantago major,plantain,freshwater,freshwater,v1.2_curated
-Poa pratensis,Kentucky Bluegrass,freshwater,freshwater,v1.2_curated
-Populus balsamifera,balsam poplar,freshwater,freshwater,v1.2_curated
-Populus tremuloides,trembling aspen,freshwater,freshwater,v1.2_curated
-Rorippa sylvestris,creeping yellow cress,slightly brackish,slightly brackish,v1.2_curated
-Rosa acicularis,prickly rose,freshwater,freshwater,v1.2_curated
-Rumex crispus,Yellow Dock,freshwater - slightly brackish,slightly brackish,starter
-Rumex fueginus,golden dock,slightly brackish,slightly brackish,v1.2_curated
-Salix discolor,pussy willow,freshwater,freshwater,v1.2_curated
-Salix interior,sandbar willow,freshwater,freshwater,v1.2_curated
-Salix serissima,autumn willow,freshwater,freshwater,v1.2_curated
-Schoenoplectus acutus,giant bulrush,slightly brackish - brackish,brackish,v1.2_curated
-Schoenoplectus tabernaemontani,Common great bulrush,slightly brackish - brackish,brackish,v1.2_curated
-Scutellaria galericulata,marsh skullcap,freshwater,freshwater,v1.2_curated
-Setaria viridis,bottle grass,freshwater,freshwater,v1.2_curated
-Silene latifolia,white campion,freshwater,freshwater,v1.2_curated
-Sonchus arvensis,Perennial sowthistle,freshwater - moderately brackish,moderately brackish,starter
-Sonchus asper,prickly sow-thistle,moderately brackish,moderately brackish,v1.2_curated
-Tanacetum vulgare,tansy,slightly brackish,slightly brackish,v1.2_curated
-Triglochin maritima,Seaside arrowgrass,freshwater - brackish,brackish,starter
-Triticum aestivum,wheat,freshwater - moderately brackish,moderately brackish,starter
-Typha latifolia,Common cattail,freshwater,freshwater,v1.2_curated
-Urtica dioica,Stinging nettle,freshwater,freshwater,starter
+"species_latin","species_common","salinity_range","most_saline","provenance","primary_source_ids"
+"Agrostis scabra","rough hair grass","slightly brackish","slightly brackish","v1.2_curated",
+"Alopecurus aequalis","Short awned foxtail","slightly brackish - moderately brackish","moderately brackish","starter","usda_nrcs_alopecurus"
+"Atriplex prostrata","prostrate saltbush","freshwater - slightly brackish","slightly brackish","starter",
+"Avena fatua","Wild oat","freshwater - moderately brackish","moderately brackish","starter",
+"Avena sativa","cultivated oat","freshwater","freshwater","v1.2_curated","liu_2020"
+"Beckmannia syzigachne","Slough grass","brackish","brackish","starter","usda_nrcs_beckmannia"
+"Brassica napus","canola","moderately brackish","moderately brackish","v1.2_curated",
+"Brassica rapa","field mustard","moderately brackish","moderately brackish","v1.2_curated",
+"Bromus inermis","smooth brome","moderately brackish","moderately brackish","v1.2_curated",
+"Calamagrostis canadensis","marsh reed grass","slightly brackish","slightly brackish","v1.2_curated",
+"Capsella bursa-pastoris","shepherdÂ’s purse","slightly brackish","slightly brackish","v1.2_curated",
+"Carex atherodes","Awned sedge","slightly brackish","slightly brackish","v1.2_curated","glaeser_2021"
+"Chamerion angustifolium","fireweed","freshwater","freshwater","v1.2_curated",
+"Chenopodium album","lambÂ’s-quarters","brackish","brackish","v1.2_curated",
+"Chenopodium salinum","Oak-leaved goosefoot","freshwater - slightly brackish","slightly brackish","starter",
+"Cirsium arvense","creeping thistle","freshwater - moderately brackish","moderately brackish","v1.2_curated","beck_2013"
+"Eleocharis mamillata","Spike rush","freshwater - slightly brackish","slightly brackish","starter",
+"Elymus albicans","awned wheatgrass","freshwater","freshwater","v1.2_curated","pegram_2024"
+"Elymus canadensis","Perennial wild rye","freshwater - moderately brackish","moderately brackish","starter","pegram_2024"
+"Elymus glaucus","Wild rye","freshwater","freshwater","starter","pegram_2024"
+"Elymus smithii","Western wheatgrass","moderately brackish","moderately brackish","starter","pegram_2024"
+"Elymus trachycaulus","Slender wheat grass","slightly brackish - moderately brackish","moderately brackish","starter","pegram_2024;usda_nrcs_elymus_trach"
+"Equisetum pratense","meadow horsetail","freshwater - slightly brackish","slightly brackish","starter",
+"Fallopia convolvulus","buckwheat","freshwater","freshwater","v1.2_curated",
+"Galium boreale","northern bedstraw","freshwater","freshwater","v1.2_curated",
+"Hordeum jubatum","Foxtail barley","slightly brackish - brackish","brackish","v1.2_curated","israelsen_2017"
+"Juncus balticus","Wire rush","freshwater - brackish","brackish","starter",
+"Juncus compressus","round fruit rush","slightly brackish","slightly brackish","v1.2_curated",
+"Linaria vulgaris","toadflax","slightly brackish","slightly brackish","v1.2_curated",
+"Lolium perenne","Perennial ryegrass","freshwater - moderately brackish","moderately brackish","starter",
+"Mentha arvensis","Wild mint","freshwater","freshwater","starter","kumar_2023"
+"Panicum virgatum","Switch grass","freshwater - moderately brackish","moderately brackish","starter","sun_2018"
+"Persicaria amphibia","Water smartweed","freshwater","freshwater","starter",
+"Phalaris arundinacea","reed canary grass","moderately brackish","moderately brackish","v1.2_curated",
+"Plantago major","Common plantain","freshwater","freshwater","v1.2_curated",
+"Poa pratensis","Kentucky Bluegrass","freshwater","freshwater","v1.2_curated","harris_2020"
+"Populus balsamifera","balsam poplar","freshwater","freshwater","v1.2_curated",
+"Populus tremuloides","trembling aspen","freshwater","freshwater","v1.2_curated",
+"Rorippa sylvestris","creeping yellow cress","slightly brackish","slightly brackish","v1.2_curated",
+"Rosa acicularis","prickly rose","freshwater","freshwater","v1.2_curated",
+"Rumex crispus","Yellow Dock","freshwater - slightly brackish","slightly brackish","starter",
+"Rumex fueginus","golden dock","slightly brackish","slightly brackish","v1.2_curated",
+"Salix discolor","pussy willow","freshwater","freshwater","v1.2_curated",
+"Salix interior","sandbar willow","freshwater","freshwater","v1.2_curated",
+"Salix serissima","autumn willow","freshwater","freshwater","v1.2_curated",
+"Schoenoplectus acutus","giant bulrush","slightly brackish - brackish","brackish","v1.2_curated",
+"Schoenoplectus tabernaemontani","Common great bulrush","slightly brackish - brackish","brackish","v1.2_curated",
+"Scutellaria galericulata","marsh skullcap","freshwater","freshwater","v1.2_curated",
+"Setaria viridis","bottle grass","freshwater","freshwater","v1.2_curated",
+"Silene latifolia","white campion","freshwater","freshwater","v1.2_curated",
+"Sonchus arvensis","Perennial sowthistle","freshwater - moderately brackish","moderately brackish","starter","usda_fs_sonchus"
+"Sonchus asper","prickly sow-thistle","moderately brackish","moderately brackish","v1.2_curated",
+"Tanacetum vulgare","tansy","slightly brackish","slightly brackish","v1.2_curated",
+"Triglochin maritima","Seaside arrowgrass","freshwater - brackish","brackish","starter","khan_ungar_1999"
+"Triticum aestivum","wheat","freshwater - moderately brackish","moderately brackish","starter","shukla_2017"
+"Typha latifolia","Common cattail","freshwater","freshwater","v1.2_curated","manitou_bedard_1973"
+"Urtica dioica","Stinging nettle","freshwater","freshwater","starter",

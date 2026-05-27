@@ -34,6 +34,7 @@ library(dplyr)
 library(stringr)
 library(tibble)
 library(here)
+library(tidyr)
 
 starter_path <- here("data-raw", "projects", "BD2025.042", "VegSalinity_Starter.csv")
 stopifnot(file.exists(starter_path))
@@ -111,11 +112,43 @@ starter_species <- starter |>
     .groups = "drop"
   )
 
+# Per-species primary-literature linkage to references.csv.
+# Only species whose name (or genus, for genus-level references such as
+# pegram_2024 "Elymus Genus") is explicitly stated in the references' title
+# or notes column are linked here. Multi-species regional refs (warrence_nd,
+# batistel_2022) are deliberately not auto-linked — the underlying species
+# lists weren't transcribed into references.csv, so linking them would be
+# unverifiable. Add citations as the literature review continues; the FK
+# integrity check below will catch any source_id typos.
+citations <- tribble(
+  ~latin_norm,                ~primary_source_ids,
+  "carex atherodes",          "glaeser_2021",
+  "cirsium arvense",          "beck_2013",
+  "typha latifolia",          "manitou_bedard_1973",
+  "hordeum jubatum",          "israelsen_2017",
+  "poa pratensis",            "harris_2020",
+  "avena sativa",             "liu_2020",
+  "triglochin maritima",      "khan_ungar_1999",
+  "mentha arvensis",          "kumar_2023",
+  "triticum aestivum",        "shukla_2017",
+  "panicum virgatum",         "sun_2018",
+  "alopecurus aequalis",      "usda_nrcs_alopecurus",
+  "beckmannia syzigachne",    "usda_nrcs_beckmannia",
+  "sonchus arvensis",         "usda_fs_sonchus",
+  "elymus canadensis",        "pegram_2024",
+  "elymus glaucus",           "pegram_2024",
+  "elymus trachycaulus",      "pegram_2024;usda_nrcs_elymus_trach",
+  "elymus smithii",           "pegram_2024",
+  "elymus albicans",          "pegram_2024",
+)
+
 # Merge: v1.2 wins on overlap; v1.2-only species (none in current data) would
-# be added as new rows.
+# be added as new rows. Citations joined last; species without a linked
+# reference get NA (written as empty cell in the CSV).
 species_salinity_tolerance <- starter_species |>
   full_join(v12 |> select(latin_norm, v12_range = salinity_range, v12_latin = species_latin),
             by = "latin_norm") |>
+  left_join(citations, by = "latin_norm") |>
   mutate(
     provenance     = if_else(!is.na(v12_range), "v1.2_curated", "starter"),
     salinity_range = if_else(!is.na(v12_range), v12_range, salinity_range),
@@ -123,8 +156,23 @@ species_salinity_tolerance <- starter_species |>
     species_common = if_else(is.na(species_common), "", species_common),
     most_saline    = .most_saline(salinity_range)
   ) |>
-  select(species_latin, species_common, salinity_range, most_saline, provenance) |>
+  select(species_latin, species_common, salinity_range, most_saline,
+         provenance, primary_source_ids) |>
   arrange(species_latin)
+
+# FK integrity check: every source_id used in primary_source_ids must exist
+# in references.csv. Splits semicolon-separated lists and resolves each one.
+refs <- read.csv(here("data-raw", "references.csv"),
+                 stringsAsFactors = FALSE, encoding = "latin1")
+cited_ids <- species_salinity_tolerance$primary_source_ids |>
+  na.omit() |>
+  strsplit(";") |>
+  unlist() |>
+  trimws() |>
+  unique()
+missing <- setdiff(cited_ids, refs$source_id)
+if (length(missing)) stop("Orphan source_id(s) in citations: ",
+                          paste(missing, collapse = ", "))
 
 out_path <- here("data-raw", "species_salinity_tolerance.csv")
 write.csv(species_salinity_tolerance, out_path, row.names = FALSE, na = "")
