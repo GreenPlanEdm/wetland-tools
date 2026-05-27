@@ -161,24 +161,30 @@ rangeland_plants <- read.csv(here("data-raw", "RangePlants_2023.csv"),
 usethis::use_data(rangeland_plants, overwrite = TRUE)
 
 # Plant salinity tolerance — species-level lookup
-# Source: deduped from data-raw/projects/BD2025.042/VegSalinity_Starter.csv by
-# data-raw/extract_salinity_tolerance.R. Salinity ranges originate from the
-# ANPC Native Plant Source (2023) with a small number of fills from GoA 2016
-# (Alberta Range Plants); join lookup_source_id to the references table for
-# full citations. Species with unknown salinity are retained so the gap is
-# visible in QA/QC reports.
+# Source: BD2025.042 (Wetaskiwin Wetland Monitoring); see
+# data-raw/extract_salinity_tolerance.R for the merge logic. Values are
+# v1.2_curated (hand-assigned by the project analyst from primary literature
+# in references.csv) where available, otherwise inherited from the project
+# starter file. most_saline is the wetter end of the range, kept as an
+# ordered factor (freshwater < slightly brackish < moderately brackish <
+# brackish) so downstream code can compare/sort salinity classes directly.
 species_salinity_tolerance <- read.csv(
   here("data-raw", "species_salinity_tolerance.csv"),
   stringsAsFactors = FALSE, encoding = "latin1"
-)
+) |>
+  mutate(most_saline = factor(
+    ifelse(most_saline == "Unknown", NA_character_, most_saline),
+    levels  = c("freshwater", "slightly brackish", "moderately brackish", "brackish"),
+    ordered = TRUE
+  ))
 usethis::use_data(species_salinity_tolerance, overwrite = TRUE)
 
 # References / bibliography
-# Source: hand-compiled from BD2025.042 wetland monitoring report (pp. 44–47).
-# Each row is one citation with a stable source_id slug; rows in other
-# reference tables (e.g. species_salinity_tolerance$lookup_source_id) point
-# back here for full citation lookup, so any classification call is traceable
-# to its underlying source.
+# Source: hand-compiled from BD2025.042 wetland monitoring report (pp. 46–47),
+# "References for salinity tolerance" section. Each row is one primary-
+# literature citation with a stable source_id slug. ANPC 2023 and GoA 2016
+# are intentionally NOT included here — those lookups are for native/exotic
+# determination, not salinity, and live in anpc_wetland_species / rangeland_plants.
 references <- read.csv(
   here("data-raw", "references.csv"),
   stringsAsFactors = FALSE, encoding = "latin1"
