@@ -56,9 +56,8 @@ plots_cols <- c(
   "ind_saturation", "ind_iron_deposits", "ind_algal_mats",
   "ind_salt_crust", "ind_stunted_plants", "ind_marl_deposits",
   "ind_soil_cracks", "ind_frost_hummocks",
-  # Hydrology — permanence
-  "permanence_class",
-  # Vegetation summary outcomes
+  # Vegetation summary outcomes (permanence_class dropped — assessed from
+  # imagery in analysis/water/ rather than recorded at the plot)
   "determination", "dom_criterion",
   # Ecosite
   "ecosite", "nm_regime", "tree_mod", "structural_stage", "wi_region",
@@ -106,7 +105,6 @@ eg_plots <- data.frame(
   ind_marl_deposits  = "FALSE",
   ind_soil_cracks    = "FALSE",
   ind_frost_hummocks = "FALSE",
-  permanence_class   = "Semi-permanent",
   determination      = "Wetland",
   dom_criterion      = "Met",
   ecosite            = "w2b",
@@ -131,13 +129,6 @@ for (nm in c("ind_watermarks",    "ind_water_stained", "ind_oxidized_rhizo",
   dv_list("plots", ci[nm], c("TRUE", "FALSE"))
 }
 
-dv_list("plots", ci["permanence_class"],
-        c("Ephemeral < 7 days",
-          "Temporary (1 - 4 wk)",
-          "Seasonal (5-17 wk)",
-          "Semi-Permanent (18 - 40 wk)",
-          "Intermittent (41 - 51 wk)",
-          "Permanent (52 wk)"))
 dv_list("plots", ci["determination"], c("Wetland", "Non-wetland", "Inconclusive"))
 dv_list("plots", ci["dom_criterion"], c("Met", "Not met", "Marginal"))
 dv_list("plots", ci["structural_stage"], as.character(1:7))
@@ -173,7 +164,7 @@ widths_p <- c(
   ind_saturation = 10, ind_iron_deposits = 10, ind_algal_mats = 10,
   ind_salt_crust = 10, ind_stunted_plants = 10, ind_marl_deposits = 10,
   ind_soil_cracks = 10, ind_frost_hummocks = 10,
-  permanence_class = 16, determination = 13, dom_criterion = 11,
+  determination = 13, dom_criterion = 11,
   ecosite = 10, nm_regime = 10, tree_mod = 10,
   structural_stage = 9, wi_region = 9,
   remarks = 40
@@ -256,7 +247,6 @@ readme <- as.data.frame(rbind(
           "outlet: None / Surface / Subsurface / Both |",
           "hydro_ph / hydro_ec (uS/cm) / hydro_ppm (TDS) / hydro_temp (degC): in-situ multi-probe readings, leave blank if not measured |",
           "ind_*: TRUE if indicator was observed, FALSE if not (11 indicator columns) |",
-          "permanence_class (per GWPWB): Ephemeral <7d / Temporary (1-4 wk) / Seasonal (5-17 wk) / Semi-Permanent (18-40 wk) / Intermittent (41-51 wk) / Permanent (52 wk) |",
           "determination: Wetland / Non-wetland / Inconclusive |",
           "dom_criterion: Met / Not met / Marginal |",
           "remarks: combined hydrology notes and general observations")),
