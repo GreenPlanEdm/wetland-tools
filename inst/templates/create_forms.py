@@ -318,16 +318,32 @@ def build_veg_form(path):
         checkbox(c, nm, wx + ox, vs_a + 4, size=9, tooltip=lbl)
         draw_text(c, wx + ox + 11, vs_a + 8, lbl, FONT_TINY)
 
-    # Dominance Test row dropped — redundant with the Determination checkboxes
-    # in the row above. The dom_criterion field is retained in the Excel data
-    # entry template so field technicians can record the AWIDD §50/20 outcome
-    # in writing if they want to.
+    # Row B — Wetland Indicator Region (NWPL / AWIDD lookup region used for
+    # indicator-status assignment). Moved here from the Ecosite row so the
+    # determination + region call are co-located under the Vegetation Summary.
+    vs_b = vs_a - VS_ROW
+    cell_rect(c, MARGIN_L, vs_b, USABLE_W, VS_ROW, fill=colors.white)
+    draw_text(c, MARGIN_L + 2, vs_b + 10, "Wetland Indicator Region:", FONT_LABEL)
+    rx = MARGIN_L + 124
+    for lbl, nm, step in [
+        ("AK",   "wi_reg_ak",    90),
+        ("WMVC", "wi_reg_wmvc", 110),
+        ("GP",   "wi_reg_gp",    90),
+        ("NCNE", "wi_reg_ncne",   0),
+    ]:
+        checkbox(c, nm, rx, vs_b + 4, size=9, tooltip=f"WI Region {lbl}")
+        draw_text(c, rx + 12, vs_b + 8, lbl, FONT_FIELD)
+        rx += step
 
     # ── Ecosite Classification ────────────────────────────────────────────────
+    # Notes column removed — observers can use the form-wide Remarks field at
+    # the bottom of the page if they need to qualify the ecosite call. Freed
+    # width is redistributed across the four remaining columns so labels can
+    # be set on a single line at 9 pt instead of stacked at 4.5 pt.
     ECO_BAR = 13
-    ECO_HDR = 12
-    ECO_ROW = 16
-    eco_top = vs_a - 2
+    ECO_HDR = 14
+    ECO_ROW = 22
+    eco_top = vs_b - 2
 
     cell_rect(c, MARGIN_L, eco_top - ECO_BAR, USABLE_W, ECO_BAR, fill=TITLE_BG)
     draw_text(c, MARGIN_L + 4, eco_top - ECO_BAR + 4,
@@ -335,27 +351,18 @@ def build_veg_form(path):
               ("Helvetica-Bold", 7), colors.white)
 
     ECO_COLS = [
-        (0,   70,  "Ecosite"),
-        (70,  110, "Nutrient / Moisture\nRegime"),
-        (180, 110, "Tree Species\nModifier"),
-        (290, 120, "Structural\nStage (1–7)"),
-        (410, 130, "Wetland Indicator\nRegion"),
-        (540, 216, "Notes"),
+        (0,   100, "Ecosite"),
+        (100, 226, "Nutrient / Moisture Regime"),
+        (326, 226, "Tree Species Modifier"),
+        (552, 204, "Structural Stage (1–7)"),
     ]
 
     eco_hdr_y = eco_top - ECO_BAR
     cell_rect(c, MARGIN_L, eco_hdr_y - ECO_HDR, USABLE_W, ECO_HDR, fill=TITLE_BG)
     for ox, cw, clabel in ECO_COLS:
         cx = MARGIN_L + ox
-        lines = clabel.split("\n")
-        if len(lines) == 2:
-            draw_text(c, cx + cw / 2, eco_hdr_y - 4, lines[0],
-                      ("Helvetica-Bold", 4.5), colors.white, align="center")
-            draw_text(c, cx + cw / 2, eco_hdr_y - 9, lines[1],
-                      ("Helvetica-Bold", 4.5), colors.white, align="center")
-        else:
-            draw_text(c, cx + cw / 2, eco_hdr_y - ECO_HDR + 4, clabel,
-                      ("Helvetica-Bold", 4.5), colors.white, align="center")
+        draw_text(c, cx + cw / 2, eco_hdr_y - ECO_HDR + 4, clabel,
+                  ("Helvetica-Bold", 9), colors.white, align="center")
         if ox > 0:
             c.saveState()
             c.setStrokeColor(GRID_COLOR)
@@ -368,37 +375,25 @@ def build_veg_form(path):
     ery = eco_row_top - ECO_ROW
     cell_rect(c, MARGIN_L, ery, USABLE_W, ECO_ROW, fill=ROW_ALT)
 
-    text_field(c, "ecosite_01",   MARGIN_L +   1, ery + 2,  68, ECO_ROW - 4,
+    text_field(c, "ecosite_01",   MARGIN_L +   1, ery + 2,  98, ECO_ROW - 4,
                tooltip="Ecosite code (e.g. d1, w2b)")
-    text_field(c, "nm_regime_01", MARGIN_L +  71, ery + 2, 108, ECO_ROW - 4,
+    text_field(c, "nm_regime_01", MARGIN_L + 101, ery + 2, 224, ECO_ROW - 4,
                tooltip="Nutrient/Moisture Regime (e.g. C3, D5)")
-    text_field(c, "tree_mod_01",  MARGIN_L + 181, ery + 2, 108, ECO_ROW - 4,
+    text_field(c, "tree_mod_01",  MARGIN_L + 327, ery + 2, 224, ECO_ROW - 4,
                tooltip="Tree Species Modifier (e.g. Aw, Sw, Pl)")
 
-    sx = MARGIN_L + 291
+    # Structural-stage checkboxes centred within the widened column (204 pt);
+    # spacing bumped from 17 → 22 so the row of seven boxes reads as a band.
+    sx = MARGIN_L + 584
     for stage in range(1, 8):
-        checkbox(c, f"stage_{stage}_01", sx, ery + 4, size=8,
+        checkbox(c, f"stage_{stage}_01", sx, ery + 7, size=8,
                  tooltip=f"Structural Stage {stage}")
-        draw_text(c, sx + 9, ery + 9, str(stage), FONT_TINY)
-        sx += 17
-
-    rx = MARGIN_L + 411
-    for lbl, nm, step in [
-        ("AK",   "wi_reg_ak_01",   28),
-        ("WMVC", "wi_reg_wmvc_01", 36),
-        ("GP",   "wi_reg_gp_01",   26),
-        ("NCNE", "wi_reg_ncne_01", 36),
-    ]:
-        checkbox(c, nm, rx, ery + 4, size=8, tooltip=f"WI Region {lbl}")
-        draw_text(c, rx + 9, ery + 9, lbl, FONT_TINY)
-        rx += step
-
-    text_field(c, "eco_notes_01", MARGIN_L + 541, ery + 2, 213, ECO_ROW - 4,
-               tooltip="Ecosite notes")
+        draw_text(c, sx + 9, ery + 12, str(stage), FONT_TINY)
+        sx += 22
 
     # ── Hydrology Section ─────────────────────────────────────────────────────
     HY_BAR = 13
-    HY_ROW = 16
+    HY_ROW = 22
     hy_top = ery - 2
 
     cell_rect(c, MARGIN_L, hy_top - HY_BAR, USABLE_W, HY_BAR, fill=TITLE_BG)
@@ -408,15 +403,15 @@ def build_veg_form(path):
     # Row A — water presence, depth, outlet
     ry_a = hy_top - HY_BAR - HY_ROW
     cell_rect(c, MARGIN_L, ry_a, USABLE_W, HY_ROW, fill=HEADER_BG)
-    draw_text(c, MARGIN_L + 2, ry_a + 10, "Water at surface at time of survey:", FONT_LABEL)
-    checkbox(c, "hydro_water_y", MARGIN_L + 140, ry_a + 4, size=8, tooltip="Water present Yes")
-    draw_text(c, MARGIN_L + 150, ry_a + 8, "Y", FONT_TINY)
-    checkbox(c, "hydro_water_n", MARGIN_L + 162, ry_a + 4, size=8, tooltip="Water present No")
-    draw_text(c, MARGIN_L + 172, ry_a + 8, "N", FONT_TINY)
-    draw_text(c, MARGIN_L + 186, ry_a + 10, "Water depth (cm):", FONT_LABEL)
+    draw_text(c, MARGIN_L + 2, ry_a + 13, "Water at surface at time of survey:", FONT_LABEL)
+    checkbox(c, "hydro_water_y", MARGIN_L + 140, ry_a + 7, size=8, tooltip="Water present Yes")
+    draw_text(c, MARGIN_L + 150, ry_a + 11, "Y", FONT_TINY)
+    checkbox(c, "hydro_water_n", MARGIN_L + 162, ry_a + 7, size=8, tooltip="Water present No")
+    draw_text(c, MARGIN_L + 172, ry_a + 11, "N", FONT_TINY)
+    draw_text(c, MARGIN_L + 186, ry_a + 13, "Water depth (cm):", FONT_LABEL)
     text_field(c, "hydro_depth_cm", MARGIN_L + 244, ry_a + 2, 34, HY_ROW - 4,
                tooltip="Water depth (cm)")
-    draw_text(c, MARGIN_L + 284, ry_a + 10, "Outlet:", FONT_LABEL)
+    draw_text(c, MARGIN_L + 284, ry_a + 13, "Outlet:", FONT_LABEL)
     ox = MARGIN_L + 308
     for lbl, nm, step in [
         ("None",       "none",       34),
@@ -424,8 +419,8 @@ def build_veg_form(path):
         ("Subsurface", "subsurface", 58),
         ("Both",       "both",       34),
     ]:
-        checkbox(c, f"outlet_{nm}", ox, ry_a + 4, size=8, tooltip=f"Outlet {lbl}")
-        draw_text(c, ox + 10, ry_a + 8, lbl, FONT_TINY)
+        checkbox(c, f"outlet_{nm}", ox, ry_a + 7, size=8, tooltip=f"Outlet {lbl}")
+        draw_text(c, ox + 10, ry_a + 11, lbl, FONT_TINY)
         ox += step
 
     # In-situ water chemistry (multi-probe readings collected at the plot).
@@ -436,67 +431,64 @@ def build_veg_form(path):
         ("ppm:",  "hydro_ppm",  16, 38, 8),
         ("Temp:", "hydro_temp", 22, 30, 0),
     ]:
-        draw_text(c, ax, ry_a + 10, lbl, FONT_LABEL)
+        draw_text(c, ax, ry_a + 13, lbl, FONT_LABEL)
         text_field(c, nm, ax + label_w, ry_a + 2, field_w, HY_ROW - 4,
                    tooltip=lbl.rstrip(":"))
         ax += label_w + field_w + gap
 
-    # Row B — inundation / saturation indicators, two lines (merged from former Row B2)
-    HY_ROW_B = 28
+    # Row B — inundation / saturation indicators
+    # Split across three lines so labels can be set at 7 pt for legibility;
+    # AWIDD-standard indicators occupy lines 1–2, additional site indicators
+    # (saline / periglacial / stress) sit on line 3 below a thin divider.
+    HY_ROW_B = 52
     ry_b = ry_a - HY_ROW_B
     cell_rect(c, MARGIN_L, ry_b, USABLE_W, HY_ROW_B, fill=colors.white)
-    draw_text(c, MARGIN_L + 2, ry_b + 22, "Inundation / saturation indicators:", FONT_LABEL)
-    # Line 1: standard AWIDD inundation/saturation indicators
+    draw_text(c, MARGIN_L + 2, ry_b + 42, "Inundation / saturation indicators:", FONT_LABEL)
+
+    # Line 1 — AWIDD indicators (1/2)
     ix = MARGIN_L + 138
     for lbl, nm, step in [
-        ("Watermarks / drift lines", "watermarks",    118),
-        ("Water-stained leaves",     "water_stained",  94),
-        ("Oxidized rhizospheres",    "oxidized_rhizo", 90),
-        ("Saturation ≤30 cm",        "saturation",     72),
-        ("Iron deposits",            "iron_deposits",  62),
-        ("Algal mats",               "algal_mats",     50),
+        ("Watermarks / drift lines", "watermarks",     200),
+        ("Water-stained leaves",     "water_stained",  180),
+        ("Oxidized rhizospheres",    "oxidized_rhizo",   0),
     ]:
-        checkbox(c, f"ind_{nm}", ix, ry_b + 17, size=8, tooltip=lbl)
-        draw_text(c, ix + 10, ry_b + 21, lbl, FONT_TINY)
+        checkbox(c, f"ind_{nm}", ix, ry_b + 38, size=8, tooltip=lbl)
+        draw_text(c, ix + 10, ry_b + 42, lbl, FONT_FIELD)
         ix += step
-    # Thin divider separating the two indicator lines
+
+    # Line 2 — AWIDD indicators (2/2)
+    ix = MARGIN_L + 138
+    for lbl, nm, step in [
+        ("Saturation ≤30 cm", "saturation",    170),
+        ("Iron deposits",     "iron_deposits", 130),
+        ("Algal mats",        "algal_mats",      0),
+    ]:
+        checkbox(c, f"ind_{nm}", ix, ry_b + 21, size=8, tooltip=lbl)
+        draw_text(c, ix + 10, ry_b + 25, lbl, FONT_FIELD)
+        ix += step
+
+    # Thin divider separating AWIDD indicators from additional site indicators
     c.saveState()
     c.setStrokeColor(GRID_COLOR)
     c.setLineWidth(0.3)
-    c.line(MARGIN_L + 2, ry_b + 14, MARGIN_L + USABLE_W, ry_b + 14)
+    c.line(MARGIN_L + 2, ry_b + 17, MARGIN_L + USABLE_W, ry_b + 17)
     c.restoreState()
-    # Line 2: additional site indicators (saline / periglacial / stress)
+
+    # Line 3 — additional site indicators (saline / periglacial / stress)
     ix = MARGIN_L + 138
     for lbl, nm, step in [
-        ("Salt crust",              "salt_crust",     72),
-        ("Stunted/stressed plants", "stunted_plants", 106),
-        ("Marl deposits",           "marl_deposits",   78),
-        ("Surface soil cracks",     "soil_cracks",     90),
-        ("Frost-heave hummocks",    "frost_hummocks",  88),
+        ("Salt crust",              "salt_crust",      90),
+        ("Stunted/stressed plants", "stunted_plants", 140),
+        ("Marl deposits",           "marl_deposits",  110),
+        ("Surface soil cracks",     "soil_cracks",    140),
+        ("Frost-heave hummocks",    "frost_hummocks",   0),
     ]:
         checkbox(c, f"ind_{nm}", ix, ry_b + 4, size=8, tooltip=lbl)
-        draw_text(c, ix + 10, ry_b + 8, lbl, FONT_TINY)
+        draw_text(c, ix + 10, ry_b + 8, lbl, FONT_FIELD)
         ix += step
 
-    # Row C — water permanence class
-    ry_c = ry_b - HY_ROW
-    cell_rect(c, MARGIN_L, ry_c, USABLE_W, HY_ROW, fill=colors.white)
-    draw_text(c, MARGIN_L + 2, ry_c + 10, "Permanence class (GWPWB):", FONT_LABEL)
-    px = MARGIN_L + 114
-    for lbl, nm, step in [
-        ("Ephemeral < 7 days",          "ephemeral",    85),
-        ("Temporary (1 - 4 wk)",        "temporary",    92),
-        ("Seasonal (5-17 wk)",          "seasonal",     84),
-        ("Semi-Permanent (18 - 40 wk)", "semi_perm",   120),
-        ("Intermittent (41 - 51 wk)",   "int_exposed", 112),
-        ("Permanent (52 wk)",           "permanent",     0),
-    ]:
-        checkbox(c, f"perm_{nm}", px, ry_c + 4, size=8, tooltip=lbl)
-        draw_text(c, px + 10, ry_c + 8, lbl, FONT_FIELD)
-        px += step
-
     # ── Remarks (combined hydrology notes + general remarks) ─────────────────
-    rem_top = ry_c - 2
+    rem_top = ry_b - 2
     rem_h   = 36
     cell_rect(c, MARGIN_L, rem_top - rem_h, USABLE_W, rem_h, fill=ROW_ALT)
     draw_text(c, MARGIN_L + 2, rem_top - 7, "Remarks:", FONT_LABEL)
