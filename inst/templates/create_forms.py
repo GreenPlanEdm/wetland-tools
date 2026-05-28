@@ -294,8 +294,8 @@ def build_veg_form(path):
     # Row A — WI status species counts, then plot determination after Total
     vs_a = vs_top - VS_BAR - VS_ROW
     cell_rect(c, MARGIN_L, vs_a, USABLE_W, VS_ROW, fill=HEADER_BG)
-    draw_text(c, MARGIN_L + 2, vs_a + 10, "Species Count by WI Status:", FONT_LABEL)
-    wx = MARGIN_L + 112
+    draw_text(c, MARGIN_L + 2, vs_a + 10, "Dominant Species Count by WI Status:", FONT_LABEL)
+    wx = MARGIN_L + 124
     for lbl, nm, lw, fw in [
         ("OBL",   "sum_obl",   20, 26),
         ("FACW",  "sum_facw",  26, 26),
@@ -326,75 +326,43 @@ def build_veg_form(path):
     draw_text(c, MARGIN_L + 2, vs_b + 10, "Wetland Indicator Region:", FONT_LABEL)
     rx = MARGIN_L + 124
     for lbl, nm, step in [
-        ("AK",   "wi_reg_ak",    90),
-        ("WMVC", "wi_reg_wmvc", 110),
-        ("GP",   "wi_reg_gp",    90),
-        ("NCNE", "wi_reg_ncne",   0),
+        ("AK (Boreal)",                    "wi_reg_ak",    90),
+        ("WMVC (Mountains and Foothills)", "wi_reg_wmvc", 170),
+        ("GP (Grasslands)",                "wi_reg_gp",    95),
+        ("NCNE (Parkland)",                "wi_reg_ncne",   0),
     ]:
         checkbox(c, nm, rx, vs_b + 4, size=9, tooltip=f"WI Region {lbl}")
         draw_text(c, rx + 12, vs_b + 8, lbl, FONT_FIELD)
         rx += step
 
-    # ── Ecosite Classification ────────────────────────────────────────────────
-    # Notes column removed — observers can use the form-wide Remarks field at
-    # the bottom of the page if they need to qualify the ecosite call. Freed
-    # width is redistributed across the four remaining columns so labels can
-    # be set on a single line at 9 pt instead of stacked at 4.5 pt.
-    ECO_BAR = 13
-    ECO_HDR = 14
-    ECO_ROW = 22
-    eco_top = vs_b - 2
-
-    cell_rect(c, MARGIN_L, eco_top - ECO_BAR, USABLE_W, ECO_BAR, fill=TITLE_BG)
-    draw_text(c, MARGIN_L + 4, eco_top - ECO_BAR + 4,
-              "ECOSITE CLASSIFICATION  (Field Guide to Ecosite Classification of Northern Alberta)",
-              ("Helvetica-Bold", 7), colors.white)
-
-    ECO_COLS = [
-        (0,   100, "Ecosite"),
-        (100, 226, "Nutrient / Moisture Regime"),
-        (326, 226, "Tree Species Modifier"),
-        (552, 204, "Structural Stage (1–7)"),
-    ]
-
-    eco_hdr_y = eco_top - ECO_BAR
-    cell_rect(c, MARGIN_L, eco_hdr_y - ECO_HDR, USABLE_W, ECO_HDR, fill=TITLE_BG)
-    for ox, cw, clabel in ECO_COLS:
-        cx = MARGIN_L + ox
-        draw_text(c, cx + cw / 2, eco_hdr_y - ECO_HDR + 4, clabel,
-                  ("Helvetica-Bold", 9), colors.white, align="center")
-        if ox > 0:
-            c.saveState()
-            c.setStrokeColor(GRID_COLOR)
-            c.setLineWidth(0.3)
-            c.line(cx, eco_hdr_y - ECO_HDR, cx, eco_top - ECO_BAR)
-            c.restoreState()
-
-    # Single data row
-    eco_row_top = eco_hdr_y - ECO_HDR
-    ery = eco_row_top - ECO_ROW
-    cell_rect(c, MARGIN_L, ery, USABLE_W, ECO_ROW, fill=ROW_ALT)
-
-    text_field(c, "ecosite_01",   MARGIN_L +   1, ery + 2,  98, ECO_ROW - 4,
-               tooltip="Ecosite code (e.g. d1, w2b)")
-    text_field(c, "nm_regime_01", MARGIN_L + 101, ery + 2, 224, ECO_ROW - 4,
-               tooltip="Nutrient/Moisture Regime (e.g. C3, D5)")
-    text_field(c, "tree_mod_01",  MARGIN_L + 327, ery + 2, 224, ECO_ROW - 4,
-               tooltip="Tree Species Modifier (e.g. Aw, Sw, Pl)")
-
-    # Structural-stage checkboxes centred within the widened column (204 pt);
-    # spacing bumped from 17 → 22 so the row of seven boxes reads as a band.
-    sx = MARGIN_L + 584
-    for stage in range(1, 8):
-        checkbox(c, f"stage_{stage}_01", sx, ery + 7, size=8,
-                 tooltip=f"Structural Stage {stage}")
-        draw_text(c, sx + 9, ery + 12, str(stage), FONT_TINY)
-        sx += 22
+    # Row C — Structural Stage (1–7) with stage-name labels. Kept on the form
+    # in the Vegetation Summary block. The broader ecosite classification
+    # (Ecosite phase / nutrient-moisture regime / tree-species modifier) is
+    # deferred from the form and will be folded into the 03_transform stage
+    # rather than collected on paper.
+    vs_c = vs_b - VS_ROW
+    cell_rect(c, MARGIN_L, vs_c, USABLE_W, VS_ROW, fill=HEADER_BG)
+    draw_text(c, MARGIN_L + 2, vs_c + 10, "Structural Stage (1–7):", FONT_LABEL)
+    sx = MARGIN_L + 124
+    for stage, name, step in [
+        (1, "Herb",          70),
+        (2, "Shrub",         75),
+        (3, "sapling",       80),
+        (4, "pole",          75),
+        (5, "Young Forest", 100),
+        (6, "Mature Forest", 105),
+        (7, "Old Forest",     0),
+    ]:
+        label = f"{stage} ({name})"
+        checkbox(c, f"stage_{stage}", sx, vs_c + 4, size=9,
+                 tooltip=f"Structural Stage {stage} ({name})")
+        draw_text(c, sx + 12, vs_c + 8, label, FONT_FIELD)
+        sx += step
 
     # ── Hydrology Section ─────────────────────────────────────────────────────
     HY_BAR = 13
     HY_ROW = 22
-    hy_top = ery - 2
+    hy_top = vs_c - 2
 
     cell_rect(c, MARGIN_L, hy_top - HY_BAR, USABLE_W, HY_BAR, fill=TITLE_BG)
     draw_text(c, MARGIN_L + 4, hy_top - HY_BAR + 4, "HYDROLOGY",
