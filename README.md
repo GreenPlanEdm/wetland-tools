@@ -82,14 +82,9 @@ Two CSVs are themselves extracted from other sources rather than hand-maintained
 
 The source PDFs / project files are gitignored; the extracted CSVs are committed.
 
-### Pending datasets (Track 2)
+### Shelved datasets
 
-The build script contains commented-out stubs for these — source material is needed before they can be built:
-
-- `ecosites_nfc` — full NRC ecosite phase classification, Beckingham & Archibald 1996 (distinct from `ecosite_wetclass`, which is only the wetland crosswalk)
-- `wair_rules` — WAIR wetland classification decision rules
-
-These are tracked in [issue #4](https://github.com/GreenPlanEdm/wetland-tools/issues/4). `agrasid` was dropped from the list — it's a spatial polygon dataset, not a tabular reference; load it directly via `sf`/`terra` when needed. `salinity_tolerance` was closed out and is now shipping as `species_salinity_tolerance` above.
+Two reference tables — `ecosites_nfc` (the full Beckingham & Archibald 1996 NFC ecosite phase classification) and `wair_rules` (WAIR decision rules) — are deferred pending accessible source material. Commented-out stubs remain in `build_reference_data.R`. See [issue #4](https://github.com/GreenPlanEdm/wetland-tools/issues/4) for history.
 
 ## Dependencies
 
