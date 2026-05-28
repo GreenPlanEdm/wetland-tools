@@ -59,8 +59,10 @@ plots_cols <- c(
   # Vegetation summary outcomes (permanence_class dropped — assessed from
   # imagery in analysis/water/ rather than recorded at the plot)
   "determination", "dom_criterion",
-  # Ecosite
-  "ecosite", "nm_regime", "tree_mod", "structural_stage", "wi_region",
+  # Structural stage + wetland indicator region
+  # (ecosite / nm_regime / tree_mod dropped from the form; will be assigned
+  # in 03_transform.Rmd from external sources rather than collected in the field)
+  "structural_stage", "wi_region",
   # Remarks
   "remarks"
 )
@@ -107,9 +109,6 @@ eg_plots <- data.frame(
   ind_frost_hummocks = "FALSE",
   determination      = "Wetland",
   dom_criterion      = "Met",
-  ecosite            = "w2b",
-  nm_regime          = "C3",
-  tree_mod           = "Sw",
   structural_stage   = "3",
   wi_region          = "WMVC",
   remarks            = "Riparian marsh. Saturated at surface throughout."
@@ -165,7 +164,6 @@ widths_p <- c(
   ind_salt_crust = 10, ind_stunted_plants = 10, ind_marl_deposits = 10,
   ind_soil_cracks = 10, ind_frost_hummocks = 10,
   determination = 13, dom_criterion = 11,
-  ecosite = 10, nm_regime = 10, tree_mod = 10,
   structural_stage = 9, wi_region = 9,
   remarks = 40
 )
