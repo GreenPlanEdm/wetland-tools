@@ -31,7 +31,7 @@ flowchart TD
 
     INGEST[01_ingest.Rmd<br/>Excel → tidy R]:::pipeline
     QAQC[02_qaqc.Rmd<br/>Flag issues]:::pipeline
-    TRANSFORM[03_transform.Rmd<br/>Classify + score]:::pipeline
+    TRANSFORM[03_transform.Rmd<br/>Join references<br/>+ aggregate per plot]:::pipeline
     VIZ[04_visualize.Rmd<br/>Figures]:::pipeline
 
     PROJ_XLSX --> INGEST --> QAQC --> TRANSFORM --> VIZ
@@ -114,18 +114,28 @@ QA/QC checks the most common transcription and identification problems:
 
 Flagged rows are written to a CSV alongside the cleaned data so reviewers can chase down issues without having to re-run the full pipeline.
 
-### 5. `03_transform.Rmd` — classify and score
+### 5. `03_transform.Rmd` — join references and aggregate per-plot summaries
 
 **Inputs:** the `_clean.rds` from step 4, plus reference data from `data/*.rda`.
-**Outputs:** per-plot and per-wetland summaries (`_summary.rds`), classification calls, scores.
+**Outputs:** per-plot summaries (`_summary.rds`) with reference-table joins and aggregated cover metrics.
 
-This is where the reference data does its work. For vegetation, transform typically:
+The transform step does two things — enrich each row with reference data, then roll species rows up to a per-plot summary. For vegetation:
 
-1. Joins `wetland_indicator_status` to assign UPL–OBL ratings per region (WMVC / GP / NCNE / AK).
-2. Joins `species_salinity_tolerance` to add `salinity_range` and the ordered `most_saline` factor.
-3. Joins `invasive_species` and `noxious_weeds` to flag regulated species (replacing the older "pattern matched on common name" hack).
-4. Aggregates per plot to compute total veg cover, bare ground, invasive cover, native vs. exotic, and salinity composition.
-5. Applies AWIDD / WAIR scoring rules where applicable.
+1. **Joins reference tables** onto each species row:
+   - `wetland_indicator_status` — UPL–OBL ratings per region (WMVC / GP / NCNE / AK)
+   - `species_salinity_tolerance` — `salinity_range` and the ordered `most_saline` factor
+   - `invasive_species` and `noxious_weeds` — flag regulated species (replaces the older common-name pattern match)
+   - `anpc_wetland_species` — native / exotic origin
+
+2. **Aggregates per plot**:
+   - Total vegetation cover **per stratum** (Tree / Shrub / Ground)
+   - Bare ground cover
+   - Invasive cover
+   - Native vs. exotic cover
+
+Out of scope for now (deferred):
+- WAIR scoring — paused until the shelved `wair_rules` reference table lands; see [issue #4](https://github.com/GreenPlanEdm/wetland-tools/issues/4).
+- Salinity composition aggregation — the reference data is joined onto each species row but not yet rolled up to plot level.
 
 Every classification call should be traceable to a `source_id` in `references.rda` — see [Citation traceability](#citation-traceability) below.
 
