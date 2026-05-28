@@ -25,6 +25,8 @@ Each tool follows a four-step Rmd sequence:
 3. `03_transform.Rmd` — cross-reference tables, classify plots
 4. `04_visualize.Rmd` — produce figures for insertion into client reports
 
+See [`WORKFLOW.md`](WORKFLOW.md) for the end-to-end design document — Mermaid flowchart, per-stage walkthrough, and how to start a new project.
+
 ## Reference data pipeline
 
 Two folders, two roles:
