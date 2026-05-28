@@ -1,6 +1,14 @@
-# Extract canonical species_salinity_tolerance.csv from BD2025.042 project files.
+# ARCHIVAL — not runnable. Documents how the canonical
+# data-raw/species_salinity_tolerance.csv was originally derived from the
+# BD2025.042 (Wetaskiwin) project files. Those project files have since been
+# removed; future edits go directly to the committed CSV.
 #
-# Inputs (both gitignored; project-private):
+# The v1.2 tribble below is preserved as the record-of-truth for the 36 hand-
+# curated salinity assignments (their `provenance == "v1.2_curated"` rows in
+# the CSV trace back to here). The merge logic against the project starter
+# file produced the remaining 21 rows (provenance == "starter").
+#
+# Original inputs (both gitignored; now removed):
 #   data-raw/projects/BD2025.042/VegSalinity_Starter.csv
 #     - plot-level observations with a per-row Salinity Range column populated
 #       by an earlier upstream lookup; 57 unique species.
@@ -9,7 +17,7 @@
 #       gold-standard literature-backed assignments; values trace to the
 #       primary papers in references.csv.
 #
-# Output (committed):
+# Output (committed; still the source of truth):
 #   data-raw/species_salinity_tolerance.csv
 #
 # Merge policy: starter rows form the base; v1.2 entries override where both
