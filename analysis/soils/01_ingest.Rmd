@@ -27,7 +27,8 @@ glimpse(soils_raw)
 ```{r rename}
 # TODO: map Excel headers to standard fields:
 # plot_id, depth_top_cm, depth_bot_cm, horizon_code, munsell_hue, munsell_value,
-# munsell_chroma, texture, structure, mottles, von_post, material_type, notes
+# munsell_chroma, texture, structure, mottle_abundance, mottle_size,
+# mottle_contrast, von_post, material_type, notes
 soils <- soils_raw |> janitor::clean_names()
 ```
 

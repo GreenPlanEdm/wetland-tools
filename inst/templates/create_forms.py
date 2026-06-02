@@ -479,7 +479,7 @@ def build_soils_form(path):
 
     # Issue 4: added version identifier to subtitle
     page_title(c, "SOILS FIELD DATA FORM",
-               "Alberta Wetland Assessment  ·  AWCS / AWIDD  ·  v1.1 (2025)")
+               "Alberta Wetland Assessment  ·  AWCS / AWIDD  ·  v1.2 (2026)")
 
     # ── Header helper — 26 pt cell matching veg/hydrology form style ────────────
     # Label in top half, text field in bottom half; they never overlap.
@@ -753,18 +753,22 @@ def build_soils_form(path):
                USABLE_W - 4, AN_FIELD - 4, tooltip="Additional Notes", multiline=True)
 
     # ── Physiogeography ───────────────────────────────────────────────────────
+    # Three rows so the value sets match the soils_data_entry.xlsx dropdowns:
+    #   Row 1: Slope Position (C/U/M/L/D/Level) + Slope % + Drainage (CSSC 7-class)
+    #   Row 2: Aspect (8-point compass + Flat) — replaces the old degrees field
+    #   Row 3: Surface Stones (S0–S5) + Surface Expression
     PG_BAR = 13
-    PG_ROW = 16
+    PG_ROW = 15
     pg_top = an_ry - 2
 
     cell_rect(c, MARGIN_L, pg_top - PG_BAR, USABLE_W, PG_BAR, fill=TITLE_BG)
     draw_text(c, MARGIN_L + 4, pg_top - PG_BAR + 4, "PHYSIOGEOGRAPHY",
               ("Helvetica-Bold", 7), colors.white)
 
-    # Row 1 — Slope Position, Slope %, Aspect, Drainage
+    # Row 1 — Slope Position, Slope %, Drainage
     pg_r1 = pg_top - PG_BAR - PG_ROW
     cell_rect(c, MARGIN_L, pg_r1, USABLE_W, PG_ROW, fill=HEADER_BG)
-    draw_text(c, MARGIN_L + 2, pg_r1 + 10, "Slope Position:", FONT_LABEL)
+    draw_text(c, MARGIN_L + 2, pg_r1 + 9, "Slope Position:", FONT_LABEL)
     sp_x = MARGIN_L + 66
     for lbl, nm, step in [
         ("C",     "crest",       20),
@@ -774,44 +778,64 @@ def build_soils_form(path):
         ("D",     "depression",  20),
         ("Level", "level",       36),
     ]:
-        checkbox(c, f"slope_pos_{nm}", sp_x, pg_r1 + 4, size=8, tooltip=f"Slope Position {lbl}")
-        draw_text(c, sp_x + 10, pg_r1 + 8, lbl, FONT_TINY)
+        checkbox(c, f"slope_pos_{nm}", sp_x, pg_r1 + 3, size=8, tooltip=f"Slope Position {lbl}")
+        draw_text(c, sp_x + 10, pg_r1 + 7, lbl, FONT_TINY)
         sp_x += step
-    draw_text(c, sp_x + 4,   pg_r1 + 10, "Slope %:",   FONT_LABEL)
-    text_field(c, "slope_pct",  sp_x + 34, pg_r1 + 2, 34, PG_ROW - 4, tooltip="Slope (%)")
-    draw_text(c, sp_x + 76,  pg_r1 + 10, "Aspect (°):", FONT_LABEL)
-    text_field(c, "aspect_deg", sp_x + 114, pg_r1 + 2, 36, PG_ROW - 4, tooltip="Aspect (degrees from N)")
-    draw_text(c, sp_x + 160, pg_r1 + 10, "Drainage:", FONT_LABEL)
-    dr_x = sp_x + 198
+    draw_text(c, sp_x + 4,  pg_r1 + 9, "Slope %:", FONT_LABEL)
+    text_field(c, "slope_pct", sp_x + 34, pg_r1 + 2, 34, PG_ROW - 4, tooltip="Slope gradient (%)")
+    # Drainage — CSSC 7-class (VR / R / W / MW / I / P / VP), matching the Excel dropdown
+    draw_text(c, sp_x + 86, pg_r1 + 9, "Drainage:", FONT_LABEL)
+    dr_x = sp_x + 124
     for lbl, nm, step in [
-        ("R",  "rapid",     18),
-        ("W",  "well",      18),
-        ("MW", "mod_well",  26),
-        ("I",  "imperfect", 18),
-        ("P",  "poor",      18),
-        ("VP", "very_poor", 28),
+        ("VR", "very_rapid", 24),
+        ("R",  "rapid",      18),
+        ("W",  "well",       18),
+        ("MW", "mod_well",   26),
+        ("I",  "imperfect",  18),
+        ("P",  "poor",       18),
+        ("VP", "very_poor",  28),
     ]:
-        checkbox(c, f"drainage_{nm}", dr_x, pg_r1 + 4, size=8, tooltip=f"Drainage {lbl}")
-        draw_text(c, dr_x + 10, pg_r1 + 8, lbl, FONT_TINY)
+        checkbox(c, f"drainage_{nm}", dr_x, pg_r1 + 3, size=8, tooltip=f"Drainage {lbl}")
+        draw_text(c, dr_x + 10, pg_r1 + 7, lbl, FONT_TINY)
         dr_x += step
 
-    # Row 2 — Surface Stones, Surface Expression
+    # Row 2 — Aspect (8-point compass + Flat)
     pg_r2 = pg_r1 - PG_ROW
     cell_rect(c, MARGIN_L, pg_r2, USABLE_W, PG_ROW, fill=colors.white)
-    draw_text(c, MARGIN_L + 2, pg_r2 + 10, "Surface Stones:", FONT_LABEL)
+    draw_text(c, MARGIN_L + 2, pg_r2 + 9, "Aspect:", FONT_LABEL)
+    asp_x = MARGIN_L + 66
+    for lbl, nm, step in [
+        ("N",    "n",    20),
+        ("NE",   "ne",   24),
+        ("E",    "e",    20),
+        ("SE",   "se",   24),
+        ("S",    "s",    20),
+        ("SW",   "sw",   26),
+        ("W",    "w",    20),
+        ("NW",   "nw",   26),
+        ("Flat", "flat",  0),
+    ]:
+        checkbox(c, f"aspect_{nm}", asp_x, pg_r2 + 3, size=8, tooltip=f"Aspect {lbl}")
+        draw_text(c, asp_x + 10, pg_r2 + 7, lbl, FONT_TINY)
+        asp_x += step
+
+    # Row 3 — Surface Stones, Surface Expression
+    pg_r3 = pg_r2 - PG_ROW
+    cell_rect(c, MARGIN_L, pg_r3, USABLE_W, PG_ROW, fill=HEADER_BG)
+    draw_text(c, MARGIN_L + 2, pg_r3 + 9, "Surface Stones:", FONT_LABEL)
     ss_x = MARGIN_L + 66
     for lbl, nm in [("S0","s0"),("S1","s1"),("S2","s2"),("S3","s3"),("S4","s4"),("S5","s5")]:
-        checkbox(c, f"surf_stones_{nm}", ss_x, pg_r2 + 4, size=8, tooltip=f"Surface Stones {lbl}")
-        draw_text(c, ss_x + 10, pg_r2 + 8, lbl, FONT_TINY)
+        checkbox(c, f"surf_stones_{nm}", ss_x, pg_r3 + 3, size=8, tooltip=f"Surface Stones {lbl}")
+        draw_text(c, ss_x + 10, pg_r3 + 7, lbl, FONT_TINY)
         ss_x += 28
-    draw_text(c, ss_x + 4, pg_r2 + 10, "Surface Expression:", FONT_LABEL)
+    draw_text(c, ss_x + 4, pg_r3 + 9, "Surface Expression:", FONT_LABEL)
     se_x = ss_x + 76
     for lbl in ["a","b","f","h","i","l","m","r","s","t","u","v"]:
-        checkbox(c, f"surf_expr_{lbl}", se_x, pg_r2 + 4, size=8, tooltip=f"Surface Expression {lbl}")
-        draw_text(c, se_x + 10, pg_r2 + 8, lbl, FONT_TINY)
+        checkbox(c, f"surf_expr_{lbl}", se_x, pg_r3 + 3, size=8, tooltip=f"Surface Expression {lbl}")
+        draw_text(c, se_x + 10, pg_r3 + 7, lbl, FONT_TINY)
         se_x += 20
 
-    draw_text(c, MARGIN_L + 2, pg_r2 - 8,
+    draw_text(c, MARGIN_L + 2, pg_r3 - 8,
               "Attach soil profile sketch on reverse side.",
               ("Helvetica-Oblique", 6.5), colors.HexColor("#555555"))
 

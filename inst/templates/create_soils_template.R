@@ -54,6 +54,12 @@ plots_cols <- c(
   "depth_restrict_cm",   # Depth to Restrictive Layer
   "date",                # YYYY-MM-DD
   "gps_easting", "gps_northing",
+  # ── Physiography (plot-level site description) ─────────────────────────────
+  "slope_position",      # C / U / M / L / D / Level
+  "slope_pct",           # slope gradient (%)
+  "aspect",              # N / NE / E / SE / S / SW / W / NW / Flat
+  "drainage",            # CSSC: VR / R / W / MW / I / P / VP
+  "surface_stones",      # S0–S5 (CSSC surface stoniness class)
   # ── Form footer ──────────────────────────────────────────────────────────
   "hydric_ind_present",  # Hydric Soil Indicators Present
   "hydric_criterion_met",# Hydric Soil Criterion Met
@@ -89,6 +95,11 @@ eg_plots <- data.frame(
   date                = "2024-06-15",
   gps_easting         = "350000",
   gps_northing        = "5900000",
+  slope_position      = "L",
+  slope_pct           = "2",
+  aspect              = "N",
+  drainage            = "P",
+  surface_stones      = "S0",
   hydric_ind_present  = "Yes",
   hydric_criterion_met= "Yes",
   soil_great_group    = "Humic Gleysol",
@@ -104,8 +115,21 @@ dv_list("plots", ci_p["hydric_ind_present"],
         c("Yes", "No"))
 dv_list("plots", ci_p["hydric_criterion_met"],
         c("Yes", "No", "Marginal"))
+# Physiography dropdowns
+dv_list("plots", ci_p["slope_position"],
+        c("C", "U", "M", "L", "D", "Level"))
+dv_list("plots", ci_p["aspect"],
+        c("N", "NE", "E", "SE", "S", "SW", "W", "NW", "Flat"))
+dv_list("plots", ci_p["drainage"],
+        c("VR", "R", "W", "MW", "I", "P", "VP"))
+dv_list("plots", ci_p["surface_stones"],
+        c("S0", "S1", "S2", "S3", "S4", "S5"))
 dataValidation(wb, "plots",
   cols = ci_p["depth_restrict_cm"], rows = DATA_ROWS,
+  type = "decimal", operator = "greaterThanOrEqual", value = "0")
+# Slope gradient (%) — non-negative; can exceed 100 on very steep slopes
+dataValidation(wb, "plots",
+  cols = ci_p["slope_pct"], rows = DATA_ROWS,
   type = "decimal", operator = "greaterThanOrEqual", value = "0")
 
 # ── Column widths & freeze ─────────────────────────────────────────────────────
@@ -113,6 +137,8 @@ widths_p <- c(
   project_id = 14, site_id = 12, plot_id = 12, observer = 16,
   method = 8, depth_restrict_cm = 12,
   date = 12, gps_easting = 13, gps_northing = 13,
+  slope_position = 13, slope_pct = 9, aspect = 9,
+  drainage = 9, surface_stones = 13,
   hydric_ind_present = 13, hydric_criterion_met = 13,
   soil_great_group = 24, additional_notes = 44
 )
@@ -139,8 +165,10 @@ horizons_cols <- c(
   "structure",      # Structure (dropdown of form codes)
   "von_post",       # Von Post
   "material",       # Material (Min / Peat / Muck / Marl)
-  "mottles",        # Mottles  (None / Few / Com / Many)
-  "redox",          # Redox    (None / Few / Com / Many)
+  # Mottles split into the three characteristics recorded on the field form
+  "mottle_abundance", # None / Few / Common / Many
+  "mottle_size",      # Fine / Medium / Coarse
+  "mottle_contrast",  # Faint / Distinct / Prominent
   "notes"           # Notes
 )
 n_h  <- length(horizons_cols)
@@ -175,14 +203,26 @@ eg_horizons <- data.frame(
   structure   = "SBK",
   von_post    = "",
   material    = "Min",
-  mottles     = "Few",
-  redox       = "Few",
+  mottle_abundance = "Few",
+  mottle_size      = "Fine",
+  mottle_contrast  = "Distinct",
   notes       = "Oxidized root channels; abrupt smooth lower boundary."
 )
 writeData(wb, "horizons", eg_horizons, startRow = 3, colNames = FALSE)
 addStyle(wb, "horizons", s_eg, rows = 3, cols = 1:n_h, gridExpand = TRUE)
 
 # ── Data validation ───────────────────────────────────────────────────────────
+# Horizon code — controlled vocabulary (CSSC master horizons + suffixes, letters
+# only; the protocol does not use numbered subdivisions). The set is the union of
+# the key_horizons designations in data-raw/cssc_great_groups.csv and a default
+# wetland-oriented list. Edit here to add standard horizons your protocol uses.
+dv_list("horizons", ci_h["horizon"],
+        c("L", "F", "H", "LFH", "O", "Of", "Om", "Oh",
+          "Ah", "Ahe", "Ahg", "Ae", "Aeg", "Ap", "AB",
+          "Bm", "Bg", "Bgf", "Bf", "Bfg", "Bh", "Bhf",
+          "Bt", "Btg", "Btjg", "Bnt", "Bss",
+          "C", "Cg", "Ck", "Ckg", "Cca", "Css",
+          "R", "W"))
 # Texture classes as on the field form (left to right)
 dv_list("horizons", ci_h["texture"],
         c("S", "LS", "SL", "L", "SiL", "Si",
@@ -197,12 +237,13 @@ dv_list("horizons", ci_h["von_post"],
 # Material type
 dv_list("horizons", ci_h["material"],
         c("Min", "Peat", "Muck", "Marl"))
-# Mottles abundance
-dv_list("horizons", ci_h["mottles"],
-        c("None", "Few", "Com", "Many"))
-# Redox features abundance
-dv_list("horizons", ci_h["redox"],
-        c("None", "Few", "Com", "Many"))
+# Mottle characteristics (abundance / size / contrast), each its own column
+dv_list("horizons", ci_h["mottle_abundance"],
+        c("None", "Few", "Common", "Many"))
+dv_list("horizons", ci_h["mottle_size"],
+        c("Fine", "Medium", "Coarse"))
+dv_list("horizons", ci_h["mottle_contrast"],
+        c("Faint", "Distinct", "Prominent"))
 
 dataValidation(wb, "horizons",
   cols = ci_h["depth_top_cm"], rows = DATA_ROWS,
@@ -227,8 +268,9 @@ widths_h <- c(
   structure    = 9,
   von_post     = 8,
   material     = 9,
-  mottles      = 9,
-  redox        = 9,
+  mottle_abundance = 11,
+  mottle_size      = 10,
+  mottle_contrast  = 11,
   notes        = 44
 )
 setColWidths(wb, "horizons", cols = seq_len(n_h), widths = unname(widths_h))
@@ -264,6 +306,24 @@ readme <- as.data.frame(rbind(
       "(e.g. Humic Gleysol, Mesisol, Luvic Gleysol) — classify after field season if uncertain |",
       "additional_notes: free-text notes from the form footer"
     )),
+  c("plots — physiography",
+    paste(
+      "slope_position: C=crest / U=upper / M=mid / L=lower / D=depression / Level |",
+      "slope_pct: slope gradient in percent (0 = level; may exceed 100 on steep slopes) |",
+      "aspect: downslope compass direction — N / NE / E / SE / S / SW / W / NW, or Flat where there is no aspect |",
+      "drainage (CSSC 7-class): VR=very rapidly / R=rapidly / W=well / MW=moderately well / I=imperfectly / P=poorly / VP=very poorly drained |",
+      "surface_stones: CSSC surface stoniness class S0 (nonstony) through S5 (exceedingly stony)"
+    )),
+  c("horizons — horizon code",
+    paste(
+      "horizon: choose from the dropdown of standard CSSC horizon designations",
+      "(organic L / F / H / LFH / O / Of / Om / Oh; A horizons Ah / Ahe / Ahg /",
+      "Ae / Aeg / Ap / AB; B horizons Bm / Bg / Bgf / Bf / Bfg / Bh / Bhf / Bt /",
+      "Btg / Btjg / Bnt / Bss; C horizons C / Cg / Ck / Ckg / Cca / Css; R; W).",
+      "Letters only — the protocol does not use numbered subdivisions. The list is",
+      "drawn from data-raw/cssc_great_groups.csv plus common wetland horizons; if a",
+      "horizon you need is missing, add it to the dropdown in create_soils_template.R."
+    )),
   c("horizons — Munsell colour",
     paste(
       "Record moist Munsell colour in three columns:",
@@ -293,12 +353,22 @@ readme <- as.data.frame(rbind(
       "H7-H10 = Humic (<17% fibre, well decomposed).",
       "Leave blank for mineral horizons."
     )),
+  c("horizons — mottles",
+    paste(
+      "Record mottles / redoximorphic features in three separate columns,",
+      "matching the field-form checkbox groups:",
+      "mottle_abundance: None / Few / Common / Many (form codes None / Few / Com / Many) |",
+      "mottle_size: Fine / Medium / Coarse (form codes F / M / C) |",
+      "mottle_contrast: Faint / Distinct / Prominent (form codes F / D / P).",
+      "Set mottle_abundance to None (or leave the row blank) when no mottles are present;",
+      "leave mottle_size and mottle_contrast blank in that case."
+    )),
   c("DO NOT COMPUTE",
     paste(
       "The following are derived by R in 03_transform.Rmd — do NOT enter manually:",
       "peat_depth_cm (sum of Peat/Muck horizon thicknesses),",
       "organic_fibre_class (from von_post: Fi/Me/Hu),",
-      "hydric_indicators list (from colour, mottles, redox, horizon sequence),",
+      "hydric_indicators list (from colour, mottle characteristics, horizon sequence),",
       "cssc_great_group_confirmed (CSSC classification from horizon sequence)."
     ))
 ), stringsAsFactors = FALSE)
@@ -319,7 +389,7 @@ addStyle(wb, "README", s_rm_key, rows = seq_len(n_rows), cols = 1, gridExpand = 
 addStyle(wb, "README", s_rm_val, rows = seq_len(n_rows), cols = 2, gridExpand = TRUE)
 setColWidths(wb, "README", cols = 1:2, widths = c(22, 85))
 setRowHeights(wb, "README", rows = seq_len(n_rows),
-              heights = c(44, 28, 60, 72, 60, 72, 60, 72, 72))
+              heights = c(44, 28, 60, 72, 72, 96, 60, 72, 60, 72, 72, 72))
 
 
 # ── Save ───────────────────────────────────────────────────────────────────────
