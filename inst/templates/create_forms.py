@@ -175,7 +175,9 @@ def build_veg_form(path):
     # N/E and Nox. dropped from form — derived in 03_transform.Rmd from
     # ANPC native list and Alberta noxious weeds reference table.
     # Moss (M) stratum dropped — Green Plan field protocol records Tree /
-    # Shrub / Ground only; freed width given to the Scientific/Common Name col.
+    # Shrub / Ground only; freed width given to the name columns.
+    # C_SPP holds the common name; C_NAME (wider) holds the scientific name,
+    # which is the identifier all downstream reference lookups join on.
     C_SPP  = (ML,        90)
     C_NAME = (ML +  90, 238)
     C_T    = (ML + 328,  18)
@@ -201,8 +203,8 @@ def build_veg_form(path):
         draw_text(c, cx + cw / 2, chy - MAIN_H + 4, label,
                   ("Helvetica-Bold", 8), colors.white, align="center")
 
-    hdr_col(*C_SPP,  "Species Code")
-    hdr_col(*C_NAME, "Scientific / Common Name")
+    hdr_col(*C_SPP,  "Common Name")
+    hdr_col(*C_NAME, "Scientific Name")
     hdr_col(C_T[0], C_T[1]+C_S[1]+C_G[1], "Stratum")
     hdr_col(*C_COV,  "% Cover")
     hdr_col(C_OBL[0], C_OBL[1]+C_FACW[1]+C_FAC[1]+C_FACU[1]+C_UPL[1]+C_NL[1],
@@ -241,10 +243,10 @@ def build_veg_form(path):
         cell_rect(c, MARGIN_L, ry, USABLE_W, ROW_H, fill=fill)
         rn = f"{r + 1:02d}"
 
-        text_field(c, f"spp_code_{rn}", C_SPP[0] + 1, ry + 2,
-                   C_SPP[1] - 2, ROW_H - 4, tooltip=f"Species code row {r+1}")
+        text_field(c, f"spp_common_{rn}", C_SPP[0] + 1, ry + 2,
+                   C_SPP[1] - 2, ROW_H - 4, tooltip=f"Common name row {r+1}")
         text_field(c, f"spp_name_{rn}", C_NAME[0] + 1, ry + 2,
-                   C_NAME[1] - 2, ROW_H - 4, tooltip=f"Species name row {r+1}")
+                   C_NAME[1] - 2, ROW_H - 4, tooltip=f"Scientific name row {r+1}")
 
         for col, lbl in [(C_T, "T"), (C_S, "S"), (C_G, "G")]:
             checkbox(c, f"strat_{lbl}_{rn}", col[0] + 4, ry + 4,

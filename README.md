@@ -66,7 +66,7 @@ source("data-raw/build_reference_data.R")
 |---|---|---|
 | `wetland_indicator_status` | `ABWetlandPlantList_2021.csv` | UPL–OBL status for AB species (WMVC/GP/NCNE/AK regions) |
 | `awcs_wetland_species` | `awcs_wetland_species.csv` | AWCS 2015 provincial plant list with indicator assignments |
-| `anpc_wetland_species` | `ANPC_Native_Plant_List.csv` | ACIMS native plant list used for species code validation |
+| `anpc_wetland_species` | `ANPC_Native_Plant_List.csv` | ACIMS native plant list used for native/exotic origin lookup (joined by scientific name) |
 | `rangeland_plants` | `RangePlants_2023.csv` | AEP rangeland plants with forage/grazing attributes |
 | `species_salinity_tolerance` | `species_salinity_tolerance.csv` | Per-species salinity tolerance with ordered `most_saline` factor (freshwater < slightly brackish < moderately brackish < brackish) and per-row citation linkage to `references` |
 | `noxious_weeds` | `noxious_weeds_ab.csv` | AB Weed Control Act noxious and nuisance weed list (richer regulatory metadata) |

@@ -180,7 +180,7 @@ addStyle(wb, "plots", s_eg,  rows = 2, cols = seq_len(n_p), gridExpand = TRUE)
 # ══════════════════════════════════════════════════════════════════════════════
 addWorksheet(wb, "species", tabColour = "#4A7C59", gridLines = TRUE)
 
-species_cols <- c("plot_id", "spp_code", "spp_name",
+species_cols <- c("plot_id", "spp_common", "spp_name",
                   "stratum", "pct_cover", "invasive", "notes")
 n_s  <- length(species_cols)
 ci_s <- setNames(seq_len(n_s), species_cols)
@@ -191,13 +191,13 @@ writeData(wb, "species",
 )
 
 eg_species <- data.frame(
-  plot_id   = "P-01",
-  spp_code  = "TYPH.LATI",
-  spp_name  = "Typha latifolia",
-  stratum   = "G",
-  pct_cover = "30",
-  invasive  = "N",
-  notes     = ""
+  plot_id    = "P-01",
+  spp_common = "Common cattail",
+  spp_name   = "Typha latifolia",
+  stratum    = "G",
+  pct_cover  = "30",
+  invasive   = "N",
+  notes      = ""
 )
 writeData(wb, "species", eg_species, startRow = 2, colNames = FALSE)
 
@@ -209,7 +209,7 @@ dataValidation(wb, "species",
 )
 
 setColWidths(wb, "species",
-  cols = seq_len(n_s), widths = c(12, 14, 28, 8, 10, 10, 30))
+  cols = seq_len(n_s), widths = c(12, 24, 28, 8, 10, 10, 30))
 setRowHeights(wb, "species", rows = 1, heights = 30)
 freezePane(wb, "species", firstActiveRow = 2, firstActiveCol = 1)
 
@@ -250,15 +250,16 @@ readme <- as.data.frame(rbind(
           "remarks: combined hydrology notes and general observations")),
   c("species — columns",
     paste("plot_id: foreign key matching plots sheet |",
-          "spp_code: ACIMS-style code (4-letter genus + '.' + 4-letter epithet, e.g. TYPH.LATI for Typha latifolia) — must match the spp_code column in the awcs_wetland_species reference table (data/awcs_wetland_species.rda) |",
-          "spp_name: scientific name (optional — R looks up from reference table) |",
+          "spp_common: common name (human-readable label; carried through but NOT the join key) |",
+          "spp_name: scientific (Latin) name — the primary identifier. Must match the scientific_name column in the reference tables (data/awcs_wetland_species.rda, data/wetland_indicator_status.rda); all downstream lookups join on this |",
           "stratum: T (tree >10 m) / S (shrub >5 m) / G (ground 1x1 m) |",
           "invasive: Y if the field crew flagged a suspected infestation, N otherwise (canonical invasive status is still derived from aisc_invasive_plants in 03_transform.Rmd) |",
           "notes: free text")),
-  c("SPECIES CODES",
-    paste("Codes follow the ACIMS (Alberta Centre for Information on Alberta Species) binomial convention:",
-          "first 4 letters of genus + '.' + first 4 letters of specific epithet, all uppercase (e.g. CARE.AQUA, TYPH.LATI, SALI.EXIG).",
-          "The complete code list is in the R package reference table: data/awcs_wetland_species.rda (column spp_code).",
+  c("SPECIES NAMES",
+    paste("Identify each species by its scientific (Latin) name in spp_name — this is the key all reference-table lookups join on.",
+          "Match the binomial exactly as it appears in the reference list, including author abbreviations where present (e.g. 'Typha latifolia', 'Carex aquatilis Wahlenb.').",
+          "spp_common is a free-text common name for readability only and is not used for matching.",
+          "The complete scientific-name list is in the R package reference table: data/awcs_wetland_species.rda (column scientific_name).",
           "Source plant list: Alberta Wetland Plant List (ACIMS / AEP) —",
           "INSERT ACIMS URL HERE (contact Alberta Environment and Protected Areas or search 'ACIMS wetland plant list Alberta')."))
 ), stringsAsFactors = FALSE)

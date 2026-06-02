@@ -17,43 +17,50 @@ library(here)
 ## Load ingested data and reference tables
 
 ```{r load}
-veg <- readRDS(here("data-raw", paste0(params$project_id, "_veg_ingested.rds")))
+veg   <- readRDS(here("data-raw", paste0(params$project_id, "_veg_ingested.rds")))
+plots <- readRDS(here("data-raw", paste0(params$project_id, "_plots_ingested.rds")))
+
 load(here("data", "wetland_indicator_status.rda"))
 load(here("data", "awcs_wetland_species.rda"))
 load(here("data", "invasive_species.rda"))
 load(here("data", "anpc_wetland_species.rda"))
 ```
 
+# Species sheet QA
+
 ## Flag: species not in reference tables
 
-A species must resolve in the two reference tables that `03_transform.Rmd` joins
-against — `awcs_wetland_species` (by `spp_code`, for AWCS class assignment) and
-`wetland_indicator_status` (by `scientific_name`, for the regional wetland
-indicator status that drives the WIDD dominance test). Anything missing from
-either is flagged here so the field crew can correct the record or extend the
-reference table before transform runs.
+Species are identified by `scientific_name` (the Latin binomial), which is the
+join key for every reference table in `03_transform.Rmd`. A species must resolve
+in the two reference tables — `awcs_wetland_species` (AWCS class/indicator
+assignments) and `wetland_indicator_status` (the regional WI status lookup).
+Anything missing from either is flagged here so the field crew can correct the
+record (e.g. a misspelt binomial) or extend the reference table before transform
+runs. Non-vegetation rows (bare ground / litter, marked by a blank
+`scientific_name`) are excluded from this check.
 
 ```{r flag-species}
 norm <- function(x) toupper(trimws(x))
 
-known_spp_codes <- norm(awcs_wetland_species$spp_code)
-known_sci_names <- norm(wetland_indicator_status$scientific_name)
+known_awcs_names <- norm(awcs_wetland_species$scientific_name)
+known_wi_names   <- norm(wetland_indicator_status$scientific_name)
 
 veg_flag_species <- veg |>
+  filter(!is.na(scientific_name) & !norm(scientific_name) %in% c("", "-")) |>
   mutate(
-    code_in_awcs = norm(species_code)    %in% known_spp_codes,
-    name_in_wi   = norm(scientific_name) %in% known_sci_names
+    name_in_awcs = norm(scientific_name) %in% known_awcs_names,
+    name_in_wi   = norm(scientific_name) %in% known_wi_names
   ) |>
-  filter(!code_in_awcs | !name_in_wi) |>
+  filter(!name_in_awcs | !name_in_wi) |>
   mutate(
     flag = "UNRECOGNISED_SPECIES",
     missing_in = dplyr::case_when(
-      !code_in_awcs & !name_in_wi ~ "AWCS + WI list",
-      !code_in_awcs               ~ "AWCS list (data/awcs_wetland_species.rda)",
-      !name_in_wi                 ~ "WI list (ABWetlandPlantList_2021.csv)"
+      !name_in_awcs & !name_in_wi ~ "AWCS + WI list",
+      !name_in_awcs               ~ "AWCS list (data/awcs_wetland_species.rda)",
+      !name_in_wi                 ~ "WI list (data/wetland_indicator_status.rda)"
     )
   ) |>
-  select(-code_in_awcs, -name_in_wi)
+  select(-name_in_awcs, -name_in_wi)
 
 veg_flag_species
 ```
@@ -68,42 +75,161 @@ veg_flag_cover <- veg |>
 veg_flag_cover
 ```
 
-## Flag: unexpected species for region
+## Flag: missing required fields (species)
 
-```{r flag-region}
-# TODO: build region-to-expected-species lookup in reference data
-# Placeholder — cross-reference nrc_geography with known regional flora
-```
+Every row needs `plot_id`, `cover_pct`, and `stratum`. It also needs an
+*identity*: vegetation rows carry a `scientific_name`, while non-vegetation
+cover rows (bare ground / litter) carry only a `common_name` with a blank
+`scientific_name`. A row missing both names has no identity and is flagged.
 
-## Flag: missing required fields
+```{r flag-missing-species}
+required_species_fields <- c("plot_id", "cover_pct", "stratum")
 
-```{r flag-missing}
-required_fields <- c("plot_id", "species_code", "cover_pct", "stratum")
+blank <- function(x) is.na(x) | trimws(x) %in% c("", "-")
 
 veg_flag_missing <- veg |>
-  filter(if_any(all_of(required_fields), is.na)) |>
+  filter(
+    if_any(all_of(required_species_fields), is.na) |
+    (blank(scientific_name) & blank(common_name))
+  ) |>
   mutate(flag = "MISSING_REQUIRED_FIELD")
 
 veg_flag_missing
 ```
 
-## QA/QC summary
+# Plots sheet QA
 
-```{r summary}
-all_flags <- bind_rows(veg_flag_species, veg_flag_cover, veg_flag_missing)
+The plots sheet is plot-level metadata: one row per plot. Bad rows here
+are NOT dropped from `_plots_clean.rds` (that would orphan all of the
+plot's species observations); they're flagged for review only.
 
-cat("Total records:", nrow(veg), "\n")
-cat("Flagged records:", nrow(all_flags), "\n")
-cat("Flags by type:\n")
-print(table(all_flags$flag))
+## Flag: missing required fields (plots)
+
+```{r flag-missing-plots}
+required_plot_fields <- c("project_id", "plot_id", "date", "observer")
+
+plots_flag_missing <- plots |>
+  filter(if_any(all_of(required_plot_fields), is.na)) |>
+  mutate(flag = "PLOT_MISSING_REQUIRED_FIELD")
+
+plots_flag_missing
 ```
 
-## Save QA/QC report and clean data
+## Flag: duplicate plot_id
+
+```{r flag-dup-plot}
+plots_flag_dup <- plots |>
+  group_by(plot_id) |>
+  filter(dplyr::n() > 1) |>
+  ungroup() |>
+  mutate(flag = "DUPLICATE_PLOT_ID")
+
+plots_flag_dup
+```
+
+## Flag: numeric values outside expected range
+
+Bounds match the dataValidation on the Excel template; double-checked here
+in case the validation was bypassed (e.g. paste).
+
+```{r flag-numeric-plots}
+plots_flag_numeric <- plots |>
+  filter(
+    (!is.na(water_depth_cm) & water_depth_cm < 0)        |
+    (!is.na(hydro_ph)       & !between(hydro_ph,   0, 14)) |
+    (!is.na(hydro_ec)       & hydro_ec   < 0)            |
+    (!is.na(hydro_ppm)      & hydro_ppm  < 0)            |
+    (!is.na(hydro_temp)     & !between(hydro_temp, -10, 40))
+  ) |>
+  mutate(flag = "PLOT_NUMERIC_OUT_OF_RANGE")
+
+plots_flag_numeric
+```
+
+## Flag: categorical values outside the allowed set
+
+```{r flag-categorical-plots}
+valid_stages    <- 1:7
+valid_regions   <- c("AK", "WMVC", "GP", "NCNE")
+valid_det       <- c("Wetland", "Non-wetland", "Inconclusive")
+valid_outlet    <- c("None", "Surface", "Subsurface", "Both")
+valid_datum     <- c("NAD83", "WGS84")
+
+plots_flag_categorical <- plots |>
+  filter(
+    (!is.na(structural_stage) & !structural_stage %in% valid_stages) |
+    (!is.na(wi_region)        & !wi_region        %in% valid_regions) |
+    (!is.na(determination)    & !determination    %in% valid_det) |
+    (!is.na(outlet)           & !outlet           %in% valid_outlet) |
+    (!is.na(datum)            & !datum            %in% valid_datum)
+  ) |>
+  mutate(flag = "PLOT_CATEGORICAL_OUT_OF_SET")
+
+plots_flag_categorical
+```
+
+# Cross-sheet QA
+
+## Flag: plot_id in species but not in plots (orphan observations)
+
+```{r flag-orphan-species}
+plots_in_data <- unique(plots$plot_id)
+
+veg_flag_orphan <- veg |>
+  filter(!plot_id %in% plots_in_data) |>
+  mutate(flag = "ORPHAN_SPECIES_NO_PLOT_ROW")
+
+veg_flag_orphan
+```
+
+## Flag: plot_id in plots but with no species observations
+
+```{r flag-empty-plot}
+species_plots <- unique(veg$plot_id)
+
+plots_flag_empty <- plots |>
+  filter(!plot_id %in% species_plots) |>
+  mutate(flag = "PLOT_HAS_NO_SPECIES")
+
+plots_flag_empty
+```
+
+# QA/QC summary
+
+```{r summary}
+veg_flags   <- bind_rows(veg_flag_species, veg_flag_cover,
+                          veg_flag_missing, veg_flag_orphan)
+plots_flags <- bind_rows(plots_flag_missing, plots_flag_dup,
+                          plots_flag_numeric, plots_flag_categorical,
+                          plots_flag_empty)
+
+cat("Species sheet:\n")
+cat("  Total records  :", nrow(veg), "\n")
+cat("  Flagged records:", nrow(veg_flags), "\n")
+if (nrow(veg_flags))   print(table(veg_flags$flag))
+
+cat("\nPlots sheet:\n")
+cat("  Total records  :", nrow(plots), "\n")
+cat("  Flagged records:", nrow(plots_flags), "\n")
+if (nrow(plots_flags)) print(table(plots_flags$flag))
+```
+
+# Save QA/QC outputs
+
+Species: flagged rows are excluded from `_veg_clean.rds` so downstream
+joins and aggregations don't pick them up. Plots: nothing is dropped
+from `_plots_clean.rds` — review the flags CSV and re-transcribe as
+needed.
 
 ```{r save}
-veg_clean <- veg |>
-  anti_join(all_flags, by = names(veg))   # exclude flagged rows for downstream
+veg_clean   <- veg   |> anti_join(veg_flags, by = names(veg))
+plots_clean <- plots                                     # not filtered
 
-saveRDS(veg_clean,  here("data-raw", paste0(params$project_id, "_veg_clean.rds")))
-write.csv(all_flags, here("data-raw",  paste0(params$project_id, "_veg_flags.csv")), row.names = FALSE)
+saveRDS(veg_clean,   here("data-raw", paste0(params$project_id, "_veg_clean.rds")))
+saveRDS(plots_clean, here("data-raw", paste0(params$project_id, "_plots_clean.rds")))
+
+write.csv(veg_flags,   here("data-raw", paste0(params$project_id, "_veg_flags.csv")),
+          row.names = FALSE)
+write.csv(plots_flags, here("data-raw", paste0(params$project_id, "_plots_flags.csv")),
+          row.names = FALSE)
 ```

@@ -106,7 +106,7 @@ so running the same Rmd on a new project means only changing the params block (o
 
 QA/QC checks the most common transcription and identification problems:
 
-- Unrecognised species codes (not in `awcs_wetland_species` or `anpc_wetland_species`)
+- Unrecognised species — scientific (Latin) names not in `awcs_wetland_species` or `wetland_indicator_status`
 - Out-of-range numerics (`pct_cover` > 100, `hydro_ph` outside 0–14, `water_depth_cm` < 0, etc.)
 - Missing required fields (no `plot_id`, no `date`)
 - Inconsistent `date_of_assessment` ↔ `year` columns

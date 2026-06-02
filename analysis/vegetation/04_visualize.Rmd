@@ -79,9 +79,9 @@ ggsave(here(params$output_dir, "fig_native_invasive_by_plot.png"), p_inv, width 
 ```{r fig-noxious-heatmap}
 p_heat <- veg |>
   filter(is_noxious) |>
-  group_by(plot_id, species_code) |>
+  group_by(plot_id, scientific_name) |>
   summarise(cover = sum(cover_pct, na.rm = TRUE), .groups = "drop") |>
-  ggplot(aes(x = plot_id, y = species_code, fill = cover)) +
+  ggplot(aes(x = plot_id, y = scientific_name, fill = cover)) +
   geom_tile(colour = "white") +
   scale_fill_distiller(palette = "YlOrRd", direction = 1, name = "Cover (%)") +
   labs(title = "Noxious Weed Species Heat Map",

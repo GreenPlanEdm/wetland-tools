@@ -50,7 +50,8 @@ when needed.
 ## Load clean data and reference tables
 
 ```{r load}
-veg <- readRDS(here("data-raw", paste0(params$project_id, "_veg_clean.rds")))
+veg   <- readRDS(here("data-raw", paste0(params$project_id, "_veg_clean.rds")))
+plots <- readRDS(here("data-raw", paste0(params$project_id, "_plots_clean.rds")))
 
 load(here("data", "wetland_indicator_status.rda"))   # UPL–OBL per region
 load(here("data", "anpc_wetland_species.rda"))       # native / exotic origin
@@ -59,12 +60,20 @@ load(here("data", "noxious_weeds.rda"))              # AB Weed Control Act
 load(here("data", "species_salinity_tolerance.rda")) # ordered most_saline factor
 ```
 
+> **Note on per-plot `wi_region`:** the `plots` sheet now records the
+> wetland indicator region observed at each plot. The WI-status lookup
+> below currently uses the global `params$region_priority` for every
+> species row regardless of plot. When projects span multiple WI regions,
+> the lookup should be redone per-plot using `plots$wi_region`. Tracked
+> as future work; for now `wi_region` flows through to `plot_summary`
+> as an informational column.
+
 ## Identify non-vegetation rows
 
 Convention from the field-form template: rows where `scientific_name` is
 blank, `NA`, or the literal `"-"` are non-species cover observations
-(bare ground, thatch, litter). The `species_code` field tells us which
-type (e.g. `"BARE"`, `"THATCH"`, `"LITTER"`); for the per-plot bare-ground
+(bare ground, thatch, litter). The `common_name` field labels which type
+(e.g. `"Bare ground"`, `"Thatch"`, `"Litter"`); for the per-plot bare-ground
 aggregation we collapse all of them.
 
 ```{r mark-cover-type}
@@ -190,6 +199,17 @@ plot_summary <- veg |>
     species_richness = n_distinct(scientific_name[is_vegetation]),
 
     .groups = "drop"
+  )
+
+# Attach plot-level attributes from the plots sheet (structural stage,
+# observed WI region, observed AWCS class, determination, dom criterion,
+# date / observer for downstream reporting).
+plot_summary <- plot_summary |>
+  left_join(
+    plots |> select(plot_id, date, observer,
+                    awcs_class_obs, structural_stage, wi_region,
+                    determination, dom_criterion),
+    by = "plot_id"
   )
 
 plot_summary
