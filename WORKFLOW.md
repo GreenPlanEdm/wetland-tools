@@ -2,6 +2,8 @@
 
 This document walks through how a single plot's worth of field data moves through `wetland-tools`, from the paper form an ecologist carries into the field to the figures that land in a client deliverable. Use it to onboard new analysts, brief field crews on what the office side does with their data, or audit the pipeline before a regulator-facing report.
 
+> **Before field work:** this document starts at field data capture. The earlier **desktop phase** — air photos, climate analysis, and the historical drought-weighted footprint that field work is planned against — is documented in [`DESKTOP_WORKFLOW.md`](DESKTOP_WORKFLOW.md).
+
 The package is built around three principles:
 
 1. **Standardised forms and templates** so every project's data lands in the same shape.
