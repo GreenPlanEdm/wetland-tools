@@ -1,0 +1,159 @@
+---
+title: "Peat Data QA/QC"
+date: "`r Sys.Date()`"
+output: html_document
+params:
+  project_id: "PROJECT_ID"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(dplyr)
+library(here)
+```
+
+## Load data and reference tables
+
+```{r load}
+peat     <- readRDS(here("data-raw", paste0(params$project_id, "_peat_ingested.rds")))
+plots    <- peat$plots
+horizons <- peat$horizons
+
+load(here("data", "von_post.rda"))                      # von_post_code = "H1".."H10"
+ecosite_wetclass <- read.csv(
+  here("data-raw", "Ecosite_to_WetClass.csv"), check.names = FALSE)
+valid_classes <- trimws(ecosite_wetclass[[1]])          # first column = AWCS class/form
+valid_classes <- valid_classes[valid_classes != "" &
+                                 valid_classes != "AB Wetland Classification Class and Form"]
+```
+
+> **Note on non-monotonic cores.** Von Post H values legitimately flip with
+> depth (peat stratigraphy is not monotonic). We therefore do **not** flag
+> non-monotonic H sequences. We enforce *depth* contiguity only.
+
+## Flag: inverted or non-contiguous interval depths
+
+```{r flag-depths}
+# Within each hole, intervals must start at 0 and be contiguous:
+#   each depth_top_cm == previous depth_bot_cm, and depth_top < depth_bot.
+depth_checked <- horizons |>
+  arrange(plot_id, depth_top_cm) |>
+  group_by(plot_id) |>
+  mutate(prev_bot   = lag(depth_bot_cm),
+         expected_top = ifelse(is.na(prev_bot), 0, prev_bot)) |>
+  ungroup()
+
+flag_inverted <- depth_checked |>
+  filter(depth_top_cm >= depth_bot_cm) |>
+  mutate(flag = "INVERTED_INTERVAL_DEPTH")
+
+flag_gap <- depth_checked |>
+  filter(abs(depth_top_cm - expected_top) > 1e-6) |>
+  mutate(flag = "NON_CONTIGUOUS_INTERVAL")
+
+bind_rows(flag_inverted, flag_gap) |> select(plot_id, depth_top_cm, depth_bot_cm, flag)
+```
+
+## Flag: missing or invalid Von Post on a peat interval
+
+```{r flag-vonpost}
+valid_vp <- von_post |> pull(von_post_code)
+
+flag_vp_missing <- horizons |>
+  filter(is.na(von_post) | von_post == "") |>
+  mutate(flag = "MISSING_VON_POST")
+
+flag_vp_invalid <- horizons |>
+  filter(!is.na(von_post), von_post != "", !von_post %in% valid_vp) |>
+  mutate(flag = "INVALID_VON_POST")
+
+bind_rows(flag_vp_missing, flag_vp_invalid) |> select(plot_id, depth_top_cm, von_post, flag)
+```
+
+## Flag: plot-level out-of-range or unrecognised values
+
+```{r flag-plots}
+flag_class <- plots |>
+  filter(!is.na(awcs_wetland_class), !awcs_wetland_class %in% valid_classes) |>
+  mutate(flag = "UNRECOGNISED_WETLAND_CLASS")
+
+flag_zone <- plots |>
+  filter(!utm_zone %in% c("11N", "12N")) |>
+  mutate(flag = "INVALID_UTM_ZONE")
+
+flag_ph <- plots |>
+  filter(!is.na(ph), ph < 0 | ph > 14) |>
+  mutate(flag = "PH_OUT_OF_RANGE")
+
+flag_coords <- plots |>
+  filter(is.na(gps_easting) | is.na(gps_northing)) |>
+  mutate(flag = "MISSING_COORDINATES")
+
+flag_plotlevel <- bind_rows(flag_class, flag_zone, flag_ph, flag_coords)
+flag_plotlevel |> select(plot_id, awcs_wetland_class, utm_zone, ph, flag)
+```
+
+## Flag: water table deeper than the peat profile
+
+```{r flag-watertable}
+peat_depth <- horizons |>
+  group_by(plot_id) |>
+  summarise(mineral_depth_cm = max(depth_bot_cm, na.rm = TRUE), .groups = "drop")
+
+flag_wt <- plots |>
+  left_join(peat_depth, by = "plot_id") |>
+  filter(!is.na(water_table_depth_m),
+         water_table_depth_m * 100 > mineral_depth_cm) |>
+  mutate(flag = "WATER_TABLE_BELOW_MINERAL")
+
+flag_wt |> select(plot_id, water_table_depth_m, mineral_depth_cm, flag)
+```
+
+## Flag: referential integrity between sheets
+
+```{r flag-referential}
+holes_in_plots    <- unique(plots$plot_id)
+holes_in_horizons <- unique(horizons$plot_id)
+
+flag_orphan_horizon <- horizons |>
+  filter(!plot_id %in% holes_in_plots) |>
+  mutate(flag = "HORIZON_WITHOUT_PLOT")
+
+flag_plot_no_horizon <- plots |>
+  filter(!plot_id %in% holes_in_horizons) |>
+  mutate(flag = "PLOT_WITHOUT_HORIZONS")
+
+bind_rows(
+  flag_orphan_horizon |> select(plot_id, flag),
+  flag_plot_no_horizon |> select(plot_id, flag)
+)
+```
+
+## Summary and save
+
+```{r save}
+horizon_flags <- bind_rows(flag_inverted, flag_gap, flag_vp_missing,
+                           flag_vp_invalid, flag_orphan_horizon) |>
+  select(plot_id, depth_top_cm, depth_bot_cm, von_post, flag)
+plot_flags    <- bind_rows(flag_plotlevel, flag_wt, flag_plot_no_horizon) |>
+  select(plot_id, flag)
+
+all_flags <- bind_rows(horizon_flags, plot_flags)
+cat("Total flags raised:", nrow(all_flags), "\n")
+print(table(all_flags$flag))
+
+# Clean sets = rows not implicated in a structural flag. Plot-level value flags
+# (pH range, unrecognised class) are surfaced for review but not auto-dropped,
+# so the analyst can decide; structural flags (bad depths, orphans) are removed.
+bad_horizons <- bind_rows(flag_inverted, flag_gap, flag_orphan_horizon)
+bad_plots    <- bind_rows(flag_plot_no_horizon)
+
+horizons_clean <- horizons |> anti_join(bad_horizons, by = names(horizons))
+plots_clean    <- plots    |> anti_join(bad_plots,    by = names(plots))
+
+peat_clean <- list(plots = plots_clean, horizons = horizons_clean)
+saveRDS(peat_clean, here("data-raw", paste0(params$project_id, "_peat_clean.rds")))
+write.csv(all_flags,
+          here("data-raw", paste0(params$project_id, "_peat_flags.csv")),
+          row.names = FALSE)
+```

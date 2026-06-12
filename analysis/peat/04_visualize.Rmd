@@ -1,0 +1,129 @@
+---
+title: "Peat Visualization & Volume Tables"
+date: "`r Sys.Date()`"
+output: html_document
+params:
+  project_id: "PROJECT_ID"
+  approved_boundary: "data-raw/projects/approved_harvest_area.shp"
+  ownership_boundary: "data-raw/projects/ownership_boundary.shp"
+  basemap: false           # TRUE to fetch an Esri World Imagery backdrop (needs maptiles + internet)
+  output_dir: "reports/figures"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
+                      fig.width = 7, fig.height = 6, dpi = 300)
+library(dplyr)
+library(ggplot2)
+library(sf)
+library(terra)
+library(here)
+dir.create(here(params$output_dir), showWarnings = FALSE, recursive = TRUE)
+```
+
+## Load transformed outputs
+
+```{r load}
+intervals    <- readRDS(here("data-raw", paste0(params$project_id, "_peat_transformed.rds")))
+hole_summary <- readRDS(here("data-raw", paste0(params$project_id, "_peat_hole_summary.rds")))
+volumes      <- readRDS(here("data-raw", paste0(params$project_id, "_peat_volumes.rds")))
+
+ownership <- st_read(here(params$ownership_boundary), quiet = TRUE)
+approved  <- st_transform(st_read(here(params$approved_boundary), quiet = TRUE),
+                          st_crs(ownership))
+```
+
+## Volume summary table
+
+```{r tbl-volumes}
+knitr::kable(
+  volumes,
+  col.names = c("Product", "Approved area (m³)", "Ownership area (m³)"),
+  format.args = list(big.mark = ","),
+  caption = paste0("Estimated peat volumes — ", params$project_id,
+                   ". Harvestable values are net of the reclamation allowance."))
+```
+
+## Per-hole peat profiles by Von Post humification
+
+```{r fig-profiles, fig.height=6}
+band_cols <- c(professional = "#1a9850", retail = "#fee08b",
+               non_saleable = "#8c510a")
+
+p_prof <- intervals |>
+  ggplot(aes(x = plot_id,
+             ymin = -depth_bot_cm, ymax = -depth_top_cm,
+             colour = band)) +
+  geom_linerange(linewidth = 8) +
+  scale_colour_manual(values = band_cols, name = "Peat grade",
+                      labels = c(professional = "Professional (H1-H4)",
+                                 retail = "Retail (H5-H6)",
+                                 non_saleable = "Non-saleable (H7-H10)")) +
+  scale_y_continuous(labels = ~ abs(.)) +
+  labs(title = "Peat Profiles by Grade", x = "Test hole", y = "Depth (cm)") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p_prof
+ggsave(here(params$output_dir, paste0(params$project_id, "_peat_profiles.png")),
+       p_prof, width = 9, height = 5, dpi = 300)
+```
+
+## Harvestable thickness per hole
+
+```{r fig-thickness}
+thick_long <- hole_summary |>
+  select(plot_id, Professional = prof_harv_cm, Retail = retail_harv_cm) |>
+  tidyr::pivot_longer(-plot_id, names_to = "grade", values_to = "thickness_cm")
+
+p_thick <- thick_long |>
+  ggplot(aes(x = reorder(plot_id, -thickness_cm), y = thickness_cm, fill = grade)) +
+  geom_col(position = "dodge") +
+  scale_fill_manual(values = c(Professional = "#1a9850", Retail = "#fee08b")) +
+  labs(title = "Harvestable Peat Thickness by Hole (net of reclamation)",
+       x = "Test hole", y = "Thickness (cm)", fill = NULL) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p_thick
+ggsave(here(params$output_dir, paste0(params$project_id, "_peat_thickness.png")),
+       p_thick, width = 9, height = 5, dpi = 300)
+```
+
+## Interpolated thickness maps with boundaries
+
+```{r fig-maps, fig.height=6}
+# Read back the surfaces written in 03_transform.
+surf_path <- function(nm)
+  here(params$output_dir, paste0(params$project_id, "_thickness_", nm, ".tif"))
+
+plot_surface <- function(nm, title) {
+  r <- terra::rast(surf_path(nm))
+  r <- terra::mask(r, terra::vect(ownership))           # clip to study area
+
+  # Optional Esri World Imagery backdrop (licensed for reports with attribution).
+  if (isTRUE(params$basemap) && requireNamespace("maptiles", quietly = TRUE)) {
+    bm <- maptiles::get_tiles(terra::ext(r), provider = "Esri.WorldImagery",
+                              crop = TRUE, project = TRUE)
+    terra::plotRGB(bm); terra::plot(r, alpha = 0.6, add = TRUE)
+  } else {
+    terra::plot(r, main = title)
+  }
+  terra::plot(terra::vect(ownership), border = "grey20", lwd = 1, add = TRUE)
+  terra::plot(terra::vect(approved),  border = "red",    lwd = 2, add = TRUE)
+}
+
+png(here(params$output_dir, paste0(params$project_id, "_map_professional.png")),
+    width = 1800, height = 1500, res = 200)
+plot_surface("professional", "Professional peat thickness (m)")
+dev.off()
+
+png(here(params$output_dir, paste0(params$project_id, "_map_retail.png")),
+    width = 1800, height = 1500, res = 200)
+plot_surface("retail", "Retail peat thickness (m)")
+dev.off()
+
+# Show inline as well
+plot_surface("professional", "Professional peat thickness (m)")
+plot_surface("retail", "Retail peat thickness (m)")
+```

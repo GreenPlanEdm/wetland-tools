@@ -1,0 +1,77 @@
+---
+title: "Peat Data Ingestion"
+date: "`r Sys.Date()`"
+output: html_document
+params:
+  input_file: "data-raw/projects/peat_data_entry.xlsx"
+  project_id: "PROJECT_ID"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(dplyr)
+library(readxl)
+library(janitor)
+library(here)
+```
+
+The peat data-entry workbook (`inst/templates/peat_data_entry.xlsx`) has two
+sheets:
+
+  - **plots**    — one row per test hole (header band of the field sheet)
+  - **horizons** — one row per peat interval (the field-sheet table)
+
+Both have a title banner in row 1, column headers in row 2, and a grey example
+row in row 3. We read with `skip = 1` so row 2 becomes the header, then drop the
+example/blank rows. Delete the grey example rows before submitting; the
+`!is.na(plot_id)` filter below is only a backstop for blank trailing rows.
+
+## Load both sheets
+
+```{r load}
+plots_raw <- readxl::read_excel(here(params$input_file), sheet = "plots",
+                                skip = 1) |>
+  janitor::clean_names()
+
+horizons_raw <- readxl::read_excel(here(params$input_file), sheet = "horizons",
+                                   skip = 1) |>
+  janitor::clean_names()
+
+glimpse(plots_raw)
+glimpse(horizons_raw)
+```
+
+## Coerce types and drop blank rows
+
+```{r coerce}
+plots <- plots_raw |>
+  filter(!is.na(plot_id)) |>
+  mutate(across(c(gps_easting, gps_northing, elevation_m,
+                  water_table_depth_m, ph, conductivity_us_cm),
+                as.numeric),
+         date = as.character(date))
+
+horizons <- horizons_raw |>
+  filter(!is.na(plot_id)) |>
+  mutate(across(c(depth_top_cm, depth_bot_cm), as.numeric),
+         von_post = toupper(trimws(von_post)))
+```
+
+## Confirm test-hole inventory
+
+```{r inventory}
+# Every horizon's plot_id should appear in plots, and vice versa.
+plots |> distinct(plot_id) |> arrange(plot_id)
+
+cat("Plots:", nrow(plots),
+    "| Holes with intervals:", dplyr::n_distinct(horizons$plot_id),
+    "| Interval records:", nrow(horizons), "\n")
+```
+
+## Save
+
+```{r save}
+# Keep the two tables paired in a single list so downstream steps load one file.
+peat <- list(plots = plots, horizons = horizons)
+saveRDS(peat, here("data-raw", paste0(params$project_id, "_peat_ingested.rds")))
+```
