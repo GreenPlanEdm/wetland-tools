@@ -1,0 +1,275 @@
+---
+title: "Vegetation Analysis — Hydrophytic Determination"
+date: "`r Sys.Date()`"
+output: html_document
+params:
+  project_id: "PROJECT_ID"
+  compliance_band_pct: 10
+  # Compliance band half-width (DESIGN §4). Applied as percentage POINTS for
+  # cover metrics and as a percentage of the baseline count (rounded up) for
+  # species richness. Computed here for the current survey instance (= baseline);
+  # WAIR stores it unused, Monitoring tests later years against it.
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(dplyr)
+library(tidyr)
+library(tibble)
+library(here)
+```
+
+## Purpose
+
+The regulatory core (DESIGN §3). From the per-species table and per-plot summary
+produced by `03_transform.Rmd`, this step:
+
+1. runs the **tiered three-method hydrophytic determination** per plot
+   (`methods_vegetation.Rmd`; USDA 2007, Wakeley & Lichvar 1997, USACE 2018);
+2. computes the **% hydrophytic vegetation** headline metric;
+3. rolls per-plot metrics up to **per-wetland** means (± SD); and
+4. computes the **baseline compliance band** for every plot × metric and
+   wetland × metric (computed here, drawn only by Monitoring).
+
+It produces the determination outputs every figure and table downstream depends
+on. It does **not** draw anything.
+
+```{r load}
+veg          <- readRDS(here("data-raw", paste0(params$project_id, "_veg_transformed.rds")))
+plot_summary <- readRDS(here("data-raw", paste0(params$project_id, "_plot_summary.rds")))
+
+band_pct <- as.numeric(params$compliance_band_pct)
+hydrophytic_status <- c("OBL", "FACW", "FAC")
+```
+
+## Hydrophytic determination — the tiered three-method test
+
+A **dominant** is a species ≥ 20% of its stratum cover (`is_dominant`, from
+`03_transform`). The tier is:
+
+1. **Method 1 — dominance of identified dominants.** If a plot has any 20%-rule
+   dominants, classify on them: > 50% hydrophytic (OBL/FACW/FAC) ⇒ wetland.
+2. **Method 2 — 50/20 rule (USDA 2007).** If a plot has *no* 20%-rule
+   dominants, select dominants by the 50/20 rule (rank by cover within stratum;
+   take species cumulatively to 50% of the stratum total, plus any other species
+   exceeding 20%), then apply the dominance test.
+3. **Method 3 — prevalence index (Wakeley & Lichvar 1997).**
+   `PI = Σ(cover·weight) / Σ(cover)` over rated species; `PI < 3` ⇒ wetland.
+   Used to resolve an exact 50/50 split of the Method-2 dominance test.
+
+> **Interpretation flag (exact-50% ties).** `methods_vegetation.Rmd` routes only
+> *Method-2* dominance ties to the prevalence index, and states Method 1 calls a
+> wetland when dominants are "more than 50%" hydrophytic. This module therefore
+> implements the literal wording: a Method-1 plot at exactly 50% resolves as
+> **Non-wetland** (it is not "more than 50%"), and is *not* sent to the
+> prevalence index. If the firm wants Method-1 50/50 ties resolved by PI too
+> (more consistent with Method 2, and arguably more defensible), update both the
+> methods doc and the `determination` logic below together.
+
+```{r dom-5020}
+# 50/20 dominant selection within one stratum's cover vector.
+dom_5020 <- function(cover) {
+  cover[is.na(cover)] <- 0
+  total <- sum(cover)
+  if (total <= 0) return(rep(FALSE, length(cover)))
+  ord <- order(cover, decreasing = TRUE)
+  cum <- cumsum(cover[ord])
+  n50 <- which(cum >= 0.5 * total)[1]   # species cumulatively reaching 50%
+  sel <- logical(length(cover))
+  sel[ord[seq_len(n50)]] <- TRUE
+  sel[cover > 0.2 * total] <- TRUE      # plus any species exceeding 20%
+  sel
+}
+
+veg_v <- veg |>
+  filter(is_vegetation) |>
+  group_by(plot_id, stratum) |>
+  mutate(is_dom_5020 = dom_5020(cover_pct)) |>
+  ungroup()
+```
+
+```{r determination}
+det_raw <- veg_v |>
+  group_by(plot_id) |>
+  summarise(
+    # Method 1 dominant set (20% rule)
+    n_dom_m1 = sum(is_dominant, na.rm = TRUE),
+    n_hyd_m1 = sum(is_dominant & wi_status %in% hydrophytic_status, na.rm = TRUE),
+    # Method 2 dominant set (50/20 rule)
+    n_dom_m2 = sum(is_dom_5020, na.rm = TRUE),
+    n_hyd_m2 = sum(is_dom_5020 & wi_status %in% hydrophytic_status, na.rm = TRUE),
+    # Prevalence index over rated species (all strata)
+    pi_num   = sum(cover_pct * wi_numeric, na.rm = TRUE),
+    pi_den   = sum(cover_pct[!is.na(wi_numeric)], na.rm = TRUE),
+    .groups  = "drop"
+  )
+
+# Anchor on the full plot list so plots with NO vegetation rows (e.g. bare
+# ground only, or all species dropped in QA) still get a row and resolve as
+# Inconclusive — rather than silently disappearing from the determination.
+det <- plot_summary |>
+  distinct(plot_id) |>
+  left_join(det_raw, by = "plot_id") |>
+  mutate(across(c(n_dom_m1, n_hyd_m1, n_dom_m2, n_hyd_m2, pi_num, pi_den),
+                ~ coalesce(.x, 0))) |>
+  mutate(
+    prevalence_index = if_else(pi_den > 0, pi_num / pi_den, NA_real_),
+
+    # Which dominant set drives the call: Method 1 if any 20%-rule dominants,
+    # otherwise Method 2's 50/20 set.
+    dominant_basis = if_else(n_dom_m1 > 0, "20% rule", "50/20 rule"),
+    n_dominants    = if_else(n_dom_m1 > 0, n_dom_m1, n_dom_m2),
+    n_dominants_hydrophytic = if_else(n_dom_m1 > 0, n_hyd_m1, n_hyd_m2),
+    pct_hydrophytic = if_else(n_dominants > 0,
+                              100 * n_dominants_hydrophytic / n_dominants,
+                              NA_real_),
+
+    determination = case_when(
+      n_dominants == 0                                   ~ "Inconclusive",
+      n_dom_m1 > 0  & pct_hydrophytic > 50               ~ "Wetland",
+      n_dom_m1 > 0                                        ~ "Non-wetland",  # incl. exactly 50%
+      pct_hydrophytic > 50                               ~ "Wetland",       # Method 2
+      pct_hydrophytic < 50                               ~ "Non-wetland",   # Method 2
+      !is.na(prevalence_index) & prevalence_index < 3    ~ "Wetland",       # Method 3 tie-break
+      TRUE                                               ~ "Non-wetland"    # Method 3 tie-break
+    ),
+    deciding_method = case_when(
+      n_dominants == 0                      ~ "Inconclusive: no vascular species",
+      n_dom_m1 > 0                          ~ "Method 1: dominance test",
+      pct_hydrophytic != 50                 ~ "Method 2: 50/20 dominance",
+      TRUE                                  ~ "Method 3: prevalence index"
+    )
+  )
+```
+
+```{r plot-class}
+plot_class <- det |>
+  left_join(plot_summary |> select(plot_id, wetland_id), by = "plot_id") |>
+  select(plot_id, wetland_id, determination, deciding_method, dominant_basis,
+         n_dominants, n_dominants_hydrophytic, pct_hydrophytic, prevalence_index)
+
+plot_class
+```
+
+### QA: computed vs field-recorded determination
+
+The field crew's own call (`determination_field`) is compared against the
+computed determination; mismatches are surfaced for review (not corrected).
+
+```{r qa-determination}
+det_compare <- plot_class |>
+  left_join(plot_summary |> select(plot_id, determination_field), by = "plot_id") |>
+  mutate(agrees = determination == determination_field) |>
+  select(plot_id, determination, determination_field, deciding_method, agrees)
+
+mismatches <- det_compare |> filter(!agrees | is.na(agrees))
+cat("Plots:", nrow(det_compare),
+    "| computed vs field mismatches/NA:", nrow(mismatches), "\n")
+mismatches
+```
+
+## % hydrophytic and per-plot metrics
+
+`pct_hydrophytic` joins onto the per-plot summary as the headline determination
+metric (the `Dominance_Plot` y-axis), alongside the computed determination.
+
+```{r enrich-plot-summary}
+plot_summary <- plot_summary |>
+  left_join(
+    plot_class |> select(plot_id, determination, deciding_method,
+                         dominant_basis, pct_hydrophytic),
+    by = "plot_id"
+  )
+```
+
+## Compliance band (computed, not drawn)
+
+Per DESIGN §4. Cover metrics get an absolute ± band in percentage points;
+species richness gets ± a percentage of the baseline count, rounded up. The
+adverse direction is metric-specific (a *decrease* is adverse for cover/native/
+richness; an *increase* is adverse for invasive/bare/exotic). The lower bound is
+clamped at 0; cover has no upper clamp (overlapping strata can exceed 100%).
+
+```{r metric-meta}
+metric_meta <- tribble(
+  ~metric,            ~band_type, ~adverse_direction,
+  "cover_total",      "cover",    "decrease",
+  "cover_bare",       "cover",    "increase",
+  "cover_invasive",   "cover",    "increase",
+  "cover_native",     "cover",    "decrease",
+  "cover_exotic",     "cover",    "increase",
+  "species_richness", "count",    "decrease"
+)
+
+band_half_width <- function(value, band_type, band_pct) {
+  if_else(band_type == "cover",
+          band_pct,                              # percentage points
+          ceiling(band_pct / 100 * value))       # % of count, rounded up
+}
+```
+
+```{r plot-bands}
+plot_bands <- plot_summary |>
+  select(plot_id, wetland_id, all_of(metric_meta$metric)) |>
+  pivot_longer(all_of(metric_meta$metric), names_to = "metric", values_to = "value") |>
+  left_join(metric_meta, by = "metric") |>
+  mutate(
+    half_width = band_half_width(value, band_type, band_pct),
+    band_lo    = pmax(0, value - half_width),
+    band_hi    = value + half_width
+  )
+
+head(plot_bands, 12)
+```
+
+## Per-wetland rollups
+
+Mean (± SD) across the plots in each `wetland_id` — the WAIR per-wetland error
+bar (descriptive variability). The wetland-level baseline band (mean ± band) is
+also carried for Monitoring's per-wetland compliance test.
+
+```{r wetland-summary}
+wetland_summary <- plot_summary |>
+  select(wetland_id, all_of(metric_meta$metric)) |>
+  pivot_longer(all_of(metric_meta$metric), names_to = "metric", values_to = "value") |>
+  group_by(wetland_id, metric) |>
+  summarise(
+    n_plots = sum(!is.na(value)),
+    mean    = mean(value, na.rm = TRUE),
+    sd      = sd(value, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  left_join(metric_meta, by = "metric") |>
+  mutate(
+    half_width = band_half_width(mean, band_type, band_pct),
+    band_lo    = pmax(0, mean - half_width),
+    band_hi    = mean + half_width
+  )
+
+wetland_summary
+```
+
+## Save outputs
+
+- `_plot_class.rds` — per-plot determination: `determination`, `deciding_method`,
+  `dominant_basis`, dominant counts, `pct_hydrophytic`, `prevalence_index`.
+- `_plot_summary.rds` — per-plot metrics enriched with the determination and
+  `pct_hydrophytic` (overwrites the `03_transform` summary).
+- `_plot_bands.rds` — per plot × metric baseline compliance band (long).
+- `_wetland_summary.rds` — per wetland × metric mean ± SD and baseline band.
+
+> Note: DESIGN §3 folds the per-wetland rollups conceptually into
+> `_plot_summary.rds`. They are saved here as separate `_plot_bands.rds` /
+> `_wetland_summary.rds` files (long, one row per metric) so the band model is
+> tidy and `06_visualize` / `05_monitoring` can read exactly the level they need.
+
+```{r save}
+saveRDS(plot_class,      here("data-raw", paste0(params$project_id, "_plot_class.rds")))
+saveRDS(plot_summary,    here("data-raw", paste0(params$project_id, "_plot_summary.rds")))
+saveRDS(plot_bands,      here("data-raw", paste0(params$project_id, "_plot_bands.rds")))
+saveRDS(wetland_summary, here("data-raw", paste0(params$project_id, "_wetland_summary.rds")))
+
+message("Determination complete for ", nrow(plot_class), " plots: ",
+        paste(names(table(plot_class$determination)),
+              table(plot_class$determination), sep = "=", collapse = ", "))
+```

@@ -4,24 +4,17 @@ date: "`r Sys.Date()`"
 output: html_document
 params:
   project_id: "PROJECT_ID"
-  region_priority: "WMVC, GP"
-  # Ordered list of regions for wetland indicator status, separated by commas.
-  # The first region that has a status for a given species is used; the next
-  # region in the list acts as the fallback, and so on. Species with no status
-  # in any listed region receive NA and contribute to species richness but no
-  # WI-status-derived metric.
+  region_secondary: "GP"
+  # Single project-level fallback region for wetland indicator (WI) status.
+  # The PRIMARY region is the one recorded at each plot (`plots$wi_region`);
+  # this secondary region is used only where the plot's own region returns no
+  # status for a species. Leave blank ("") for single-region projects.
   #
-  # Valid regions:
-  #   WMVC  — Western Mountains & Valleys / Cascades
+  # Valid regions (USACE NWPL regional lists carried in the AB Wetland Plant List):
+  #   WMVC  — Western Mountains, Valleys & Coast
   #   GP    — Great Plains
   #   NCNE  — North Central & Northeast
   #   AK    — Alaska
-  #
-  # Guidance for Alberta projects:
-  #   Mountains / foothills  → "WMVC, GP"
-  #   Parkland / prairies    → "GP, WMVC"
-  #   Boreal / Peace region  → "NCNE, GP"
-  #   Use all four as safety net → "WMVC, GP, NCNE, AK"
 ---
 
 ```{r setup, include=FALSE}
@@ -34,18 +27,23 @@ library(here)
 
 ## Purpose
 
-Enrich each species observation with reference-table lookups, then aggregate
-to a per-plot summary. Scope per `WORKFLOW.md` §5:
+Enrich each species observation with reference-table lookups and the fields the
+hydrophytic determination (`04_analysis.Rmd`) needs, then aggregate to a
+per-plot summary. Implements DESIGN §3.
 
-- **Joins**: regional wetland indicator status, native/exotic origin,
-  invasive / noxious flags, salinity tolerance.
-- **Aggregations**: cover per stratum (T/S/G), bare ground, invasive cover,
-  native vs. exotic cover.
+- **Per-plot WI lookup** — wetland indicator status is read from each plot's
+  own `wi_region` (primary); where that region has no status for a species, the
+  project-level `params$region_secondary` is used as a fallback. The region the
+  status was actually drawn from is recorded as `wi_region_used` (drives the
+  per-plot table footnote, DESIGN §7).
+- **Other joins** — native/exotic origin, invasive / noxious flags, salinity.
+- **Determination-support fields** — `stratum_cover`, `is_dominant` (the 20%
+  rule), and `wi_numeric` (the prevalence-index weight).
+- **Aggregations** — cover per stratum, bare ground, invasive, native vs exotic,
+  richness, carried to a per-plot summary.
 
-Out of scope for this step (deferred): AWIDD dominance test, WAIR scoring,
-salinity-composition aggregation. The salinity reference is still joined
-onto each row so downstream code (or `04_visualize.Rmd`) can roll it up
-when needed.
+The wetland determination itself, the % hydrophytic metric, per-wetland rollups,
+and the compliance band are computed downstream in `04_analysis.Rmd`.
 
 ## Load clean data and reference tables
 
@@ -60,13 +58,18 @@ load(here("data", "noxious_weeds.rda"))              # AB Weed Control Act
 load(here("data", "species_salinity_tolerance.rda")) # ordered most_saline factor
 ```
 
-> **Note on per-plot `wi_region`:** the `plots` sheet now records the
-> wetland indicator region observed at each plot. The WI-status lookup
-> below currently uses the global `params$region_priority` for every
-> species row regardless of plot. When projects span multiple WI regions,
-> the lookup should be redone per-plot using `plots$wi_region`. Tracked
-> as future work; for now `wi_region` flows through to `plot_summary`
-> as an informational column.
+```{r check-wetland-id}
+# wetland_id groups plots for every per-wetland figure / rollup (DESIGN §3, §8).
+# It is captured explicitly on the plots sheet — never parsed from the plot-ID
+# prefix. If the column is absent (older template), warn and carry NA so the
+# pipeline still runs; per-wetland rollups will then collapse to a single group.
+if (!"wetland_id" %in% names(plots)) {
+  warning("`wetland_id` not found on the plots sheet. Per-wetland rollups will ",
+          "collapse to NA. Add a `wetland_id` column in the Excel template and ",
+          "carry it through 01_ingest.Rmd (DESIGN §3).")
+  plots$wetland_id <- NA_character_
+}
+```
 
 ## Identify non-vegetation rows
 
@@ -85,69 +88,92 @@ veg <- veg |>
   )
 ```
 
-## Build regional indicator status lookup
+## Per-plot wetland indicator status lookup
 
-```{r region-lookup}
+The reference table `wetland_indicator_status` has one row per species with a
+status column per region (`wmvc`, `gp`, `ncne`, `ak`). We reshape it to long
+form `(scientific_name, region, wi_status)` and clean the codes — uppercasing
+and treating blanks / `"NI"` (no indicator) as missing.
+
+```{r wi-long}
 valid_regions <- c("WMVC", "GP", "NCNE", "AK")
-region_order  <- trimws(strsplit(params$region_priority, ",")[[1]])
 
-invalid <- setdiff(region_order, valid_regions)
-if (length(invalid) > 0)
-  stop("Invalid region(s): ", paste(invalid, collapse = ", "),
-       ". Must be from: ", paste(valid_regions, collapse = ", "))
+region_secondary <- {
+  rs <- params$region_secondary
+  if (is.null(rs)) "" else toupper(trimws(rs))
+}
+if (nzchar(region_secondary) && !region_secondary %in% valid_regions)
+  stop("Invalid `region_secondary`: ", region_secondary,
+       ". Must be one of: ", paste(valid_regions, collapse = ", "), " (or blank).")
 
-message("Region priority: ", paste(region_order, collapse = " -> "))
-
-# wetland_indicator_status.rda columns: scientific_name, common_name,
-# wmvc, gp, ncne, ak, species_code. Region columns are lowercase.
-region_cols <- tolower(region_order)
-
-wi_lookup <- wetland_indicator_status |>
-  select(scientific_name, all_of(region_cols)) |>
-  mutate(across(all_of(region_cols), \(x) {
-    x <- toupper(trimws(x))
-    ifelse(x == "" | x == "NI", NA_character_, x)
-  })) |>
+wi_long <- wetland_indicator_status |>
+  select(scientific_name, wmvc, gp, ncne, ak) |>
+  pivot_longer(c(wmvc, gp, ncne, ak), names_to = "region", values_to = "wi_status") |>
   mutate(
-    wi_status      = coalesce(!!!syms(region_cols)),
-    wi_region_used = {
-      m <- pick(all_of(region_cols))
-      apply(m, 1, \(row) {
-        idx <- which(!is.na(row))[1]
-        if (is.na(idx)) NA_character_ else region_order[idx]
-      })
-    }
+    region    = toupper(region),
+    wi_status = toupper(trimws(wi_status)),
+    wi_status = if_else(wi_status %in% c("", "NI", "NA"), NA_character_, wi_status)
   ) |>
-  select(scientific_name, wi_status, wi_region_used) |>
   filter(!is.na(wi_status))
 
-message(
-  "Indicator status assigned to ", nrow(wi_lookup), " species. ",
-  "Coverage by region: ",
-  paste(
-    sapply(region_order, \(r) paste0(r, "=", sum(wi_lookup$wi_region_used == r, na.rm = TRUE))),
-    collapse = ", "
+message("Region secondary (fallback): ",
+        if (nzchar(region_secondary)) region_secondary else "(none)")
+```
+
+For each species row we look up the status in the plot's own region (primary);
+where the primary region has no status, we fall back to `region_secondary`, and
+record which region the assigned status came from in `wi_region_used`.
+
+```{r wi-lookup}
+# Primary: the plot's recorded WI region.
+veg <- veg |>
+  left_join(
+    plots |> transmute(plot_id, plot_wi_region = toupper(trimws(wi_region))),
+    by = "plot_id"
+  ) |>
+  left_join(
+    wi_long |> rename(wi_primary = wi_status),
+    by = c("scientific_name", "plot_wi_region" = "region")
   )
+
+# Secondary: the single project-level fallback region (may be empty).
+wi_secondary_tbl <- wi_long |>
+  filter(region == region_secondary) |>
+  select(scientific_name, wi_secondary = wi_status)
+
+veg <- veg |>
+  left_join(wi_secondary_tbl, by = "scientific_name") |>
+  mutate(
+    wi_status      = coalesce(wi_primary, wi_secondary),
+    wi_region_used = case_when(
+      !is.na(wi_primary)   ~ plot_wi_region,
+      !is.na(wi_secondary) ~ region_secondary,
+      TRUE                 ~ NA_character_
+    ),
+    # Prevalence-index weight (USACE / Wakeley & Lichvar 1997): OBL=1 … UPL=5.
+    wi_numeric = unname(c(OBL = 1, FACW = 2, FAC = 3, FACU = 4, UPL = 5)[wi_status])
+  )
+
+message(
+  "WI status assigned to ", sum(!is.na(veg$wi_status) & veg$is_vegetation),
+  " of ", sum(veg$is_vegetation), " vegetation rows. From secondary region (",
+  if (nzchar(region_secondary)) region_secondary else "none", "): ",
+  sum(veg$wi_region_used == region_secondary, na.rm = TRUE), " rows."
 )
 ```
 
-## Join reference tables onto each species row
+## Join remaining reference tables onto each species row
 
 ```{r join-references}
 veg <- veg |>
-  # Regional wetland indicator status (UPL–OBL)
-  left_join(wi_lookup, by = "scientific_name") |>
-
   # Native / exotic origin (ANPC)
   left_join(
     anpc_wetland_species |> select(scientific_name, origin),
     by = "scientific_name"
   ) |>
 
-  # Noxious / invasive flags. `invasive_species` is the AISC source list
-  # (84 species across prohibited_noxious / noxious / unregulated_invasive
-  # categories); `noxious_weeds` holds the richer WCA regulatory metadata
-  # for the statutorily regulated subset. The two overlap by design.
+  # Noxious / invasive flags. `invasive_species` is the AISC source list;
+  # `noxious_weeds` holds the WCA regulatory metadata for the regulated subset.
   left_join(
     noxious_weeds |> select(scientific_name, weed_class, control_requirement, wca_schedule),
     by = "scientific_name"
@@ -168,6 +194,25 @@ veg <- veg |>
       select(scientific_name = species_latin, salinity_range, most_saline,
              salinity_source_ids = primary_source_ids),
     by = "scientific_name"
+  )
+```
+
+## Dominance fields (the 20% rule)
+
+A **dominant** species occupies 20% or more of the total cover of its stratum
+within a plot (`methods_vegetation.Rmd`; USDA 2007). `stratum_cover` is the
+summed vegetation cover of the stratum in that plot, and `is_dominant` flags
+the species meeting the 20% threshold. The 50/20 dominant selection used when a
+plot has *no* 20%-rule dominants is computed in `04_analysis.Rmd`.
+
+```{r dominance}
+veg <- veg |>
+  group_by(plot_id, stratum) |>
+  mutate(stratum_cover = sum(cover_pct[is_vegetation], na.rm = TRUE)) |>
+  ungroup() |>
+  mutate(
+    is_dominant = is_vegetation & stratum_cover > 0 &
+                  cover_pct >= 0.20 * stratum_cover
   )
 ```
 
@@ -201,14 +246,15 @@ plot_summary <- veg |>
     .groups = "drop"
   )
 
-# Attach plot-level attributes from the plots sheet (structural stage,
-# observed WI region, observed AWCS class, determination, dom criterion,
-# date / observer for downstream reporting).
+# Attach plot-level attributes from the plots sheet. The field crew's own
+# determination / dominance call is carried as `*_field` so it does not clash
+# with the determination computed in 04_analysis (and can be QA-compared there).
 plot_summary <- plot_summary |>
   left_join(
-    plots |> select(plot_id, date, observer,
+    plots |> select(plot_id, wetland_id, date, observer,
                     awcs_class_obs, structural_stage, wi_region,
-                    determination, dom_criterion),
+                    determination_field = determination,
+                    dom_criterion_field = dom_criterion),
     by = "plot_id"
   )
 
@@ -217,11 +263,11 @@ plot_summary
 
 ## Save outputs
 
-Two artefacts:
-
-- `_veg_transformed.rds` — every species observation with reference joins
-  attached (one row per original observation).
-- `_plot_summary.rds` — per-plot aggregations (one row per plot).
+- `_veg_transformed.rds` — every species observation with reference joins and
+  the determination-support fields (`wi_status`, `wi_numeric`, `is_dominant`,
+  `stratum_cover`); one row per original observation.
+- `_plot_summary.rds` — per-plot aggregations (one row per plot), including
+  `wetland_id` and the field-recorded determination for QA.
 
 ```{r save}
 saveRDS(veg,          here("data-raw", paste0(params$project_id, "_veg_transformed.rds")))
