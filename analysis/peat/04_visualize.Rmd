@@ -94,6 +94,34 @@ ggsave(here(params$output_dir, paste0(params$project_id, "_peat_profiles.png")),
        p_prof, width = 9, height = 5, dpi = 300)
 ```
 
+## Per-hole peat profiles with the reclamation buffer
+
+The same profiles with a **dashed red line** at the base of the harvestable
+column (mineral depth − reclamation allowance). Everything below the line is the
+deepest material left in place for reclamation. Provided as a separate figure so
+it can be compared against the plain profiles above.
+
+```{r fig-profiles-reclamation, fig.height=6}
+reclaim_cm  <- round(stats::median(intervals$mineral_depth_cm - intervals$recl_line_cm))
+plot_levels <- sort(unique(intervals$plot_id))
+recl_lines  <- intervals |>
+  distinct(plot_id, recl_line_cm) |>
+  mutate(xpos = match(plot_id, plot_levels),
+         y    = -pmax(recl_line_cm, 0))   # clamp shallow holes to the surface
+
+p_prof_recl <- p_prof +
+  geom_segment(data = recl_lines, inherit.aes = FALSE,
+               aes(x = xpos - 0.45, xend = xpos + 0.45, y = y, yend = y),
+               colour = "red", linetype = "dashed", linewidth = 0.7) +
+  labs(title = "Peat Profiles by Grade with Reclamation Buffer",
+       subtitle = paste0("Dashed red line = base of the harvestable column; the ",
+                         "deepest ", reclaim_cm, " cm is left for reclamation"))
+
+p_prof_recl
+ggsave(here(params$output_dir, paste0(params$project_id, "_peat_profiles_reclamation.png")),
+       p_prof_recl, width = 9, height = 5, dpi = 300)
+```
+
 ## Harvestable thickness per hole
 
 ```{r fig-thickness}
