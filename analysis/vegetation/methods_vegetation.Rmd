@@ -1,0 +1,170 @@
+<!--
+methods_vegetation.Rmd — verbatim vegetation analysis methodology for the
+report appendix. Intended to be included as a knitr CHILD document, e.g.:
+
+    ```{r veg-methods, child = here::here("analysis/vegetation/methods_vegetation.Rmd")}
+    ```
+
+so it has no YAML front matter and inherits the parent report's `params`.
+It also renders standalone for preview (the setup chunk supplies fallbacks).
+
+Every method claim is traceable to a `source_id` in `data/references.rda`
+(see "Source references" at the foot). All citations the firm's documented
+method relies on are now present in references.csv:
+  * usda_2007            — the 50/20 dominance methodology ("USDA 2007")
+  * wakeley_lichvar_1997 — the prevalence index ("Wakeley & Lichvar 1997")
+The prevalence index previously cited USACE 2011, which is no longer available
+online; it is replaced by Wakeley & Lichvar (1997), the source paper for the
+plot-based prevalence index, with De Steven (2015) as a clarifying note.
+-->
+
+```{r veg-methods-setup, include=FALSE}
+# Project-specific values come from the parent report's params; fall back to
+# placeholders so the document also renders on its own for preview/QA.
+.mp <- function(name, default) {
+  if (exists("params") && is.list(params) && !is.null(params[[name]])) {
+    params[[name]]
+  } else {
+    default
+  }
+}
+region_secondary <- .mp("region_secondary", "GP")
+band_pct         <- .mp("compliance_band_pct", 10)
+report_type      <- .mp("report_type", "wair")
+```
+
+## Vegetation
+
+### Field sampling
+
+Plant species were assessed for percent cover within each vegetation stratum at
+every vegetation plot, using nested plots sized to the stratum: **1 m × 1 m** at
+the ground (herb) stratum, **5 m × 5 m** at the shrub stratum, and
+**10 m × 10 m** at the tree stratum. Percent cover of dominant vascular species,
+total vascular species, litter, bare ground, and open water was recorded where
+applicable. Plot layout and delineation follow the Alberta Wetland
+Identification and Delineation Directive (AWIDD; GoA 2015b).
+
+A **dominant vascular species** is defined as a species that occupies **20% or
+more** of the areal coverage of its respective stratum.
+
+### Wetland indicator status
+
+To identify hydrophytic plant species, species observed in the field were
+referenced against the **Alberta Wetland Plant List (2021)**. Because no
+Alberta-specific reference of comparable detail is currently available, it is
+common practice to reference the **National Wetland Plant List (NWPL)** when
+rating wetland indicator status; the Alberta Wetland Plant List is itself
+adapted from the NWPL regional lists.
+
+Wetland indicator status was assigned using the regional plant list for the
+**wetland indicator region recorded at each plot** (the primary region). Where
+the regional list returned no rating for a species in that plot's region, the
+status from the **secondary region (`r region_secondary`)** was used as a
+fallback. Any rating drawn from the secondary region is flagged with a
+superscript in the per-plot vegetation table (Appendix A).
+
+Species are rated in one of five categories based on their affinity for wetland
+versus upland conditions (Table 6). For the purposes of the wetland
+determination below, species rated **obligate (OBL)**, **facultative wetland
+(FACW)**, or **facultative (FAC)** are treated as hydrophytic.
+
+*Table 6. Wetland Indicator Status Ratings*
+
+| Indicator Status | Ecological Description (USACE 2018) |
+|---|---|
+| Obligate (OBL) | Almost always is a hydrophyte, rarely found in uplands |
+| Facultative Wetland (FACW) | Usually is a hydrophyte but occasionally found in uplands |
+| Facultative (FAC) | Commonly occurs as either a hydrophyte or non-hydrophyte |
+| Facultative Upland (FACU) | Occasionally is a hydrophyte, but usually occurs in uplands |
+| Upland (UPL) | Rarely a hydrophyte, almost always in uplands |
+
+Species with no indicator status under the NWPL but classified under the Alberta
+Wetland Classification System (AWCS; GoA 2015a) are noted in Appendix A (e.g.
+`M` = species characteristic of marshes).
+
+### Hydrophytic vegetation and wetland determination
+
+To determine whether a plot was located within a wetland, a **tiered approach
+involving three methods** was applied. Method 1 was applied first; Methods 2 and
+3 were employed sequentially only where the preceding method did not yield a
+conclusive result.
+
+1. **Dominance of identified dominants.** If more than 50% of the dominant
+   species across all strata are obligate (OBL), facultative wetland (FACW), or
+   facultative (FAC), the plot is considered to occur within a wetland.
+
+2. **50/20 dominance methodology (USDA 2007).** If no dominant species were
+   identified in the plot, the 50/20 methodology was implemented to determine
+   dominance — ranking species by percent cover within each stratum, selecting
+   species cumulatively until 50% of the stratum total is reached, plus any
+   additional species exceeding 20% cover — and the dominance test re-applied.
+   Where this produced a tie on the 50% dominance test, Method 3 was run.
+
+3. **Prevalence index (Wakeley & Lichvar 1997).** The prevalence index (PI)
+   was calculated to resolve the tied dominance test of Method 2 (see also
+   De Steven 2015):
+
+   $$ PI = \frac{\sum_{i} A_i \, w_i}{\sum_{i} A_i} $$
+
+   where $A_i$ is the percent cover of species $i$ and $w_i$ is its indicator
+   weight (OBL = 1, FACW = 2, FAC = 3, FACU = 4, UPL = 5). A plot with
+   **PI < 3** is considered to occur within a wetland.
+
+The method that produced each plot's determination is retained so every wetland
+call is traceable (Appendix A, per-plot determination summary).
+
+### Derived vegetation metrics
+
+The following metrics were summarised per plot and per wetland:
+
+- **Total, tree, shrub, and ground cover** — summed percent cover of vascular
+  vegetation by stratum and overall.
+- **Bare ground cover** — combined non-vegetation cover (bare ground, litter,
+  thatch).
+- **Native versus exotic cover** — percent cover by origin (Alberta Native Plant
+  Council; ANPC 2023).
+- **Invasive and noxious cover** — percent cover of species listed by the
+  Alberta Invasive Species Council (AISC 2022) or regulated under the Alberta
+  *Weed Control Act* (GoA 2023).
+- **Species richness** — count of distinct vascular species.
+- **Percent hydrophytic vegetation** — the proportion of dominant species rated
+  OBL, FACW, or FAC, expressed as a percentage; the primary indicator tracked in
+  the dominance test.
+
+```{r veg-methods-monitoring, eval = identical(report_type, "monitoring"), echo = FALSE, results = "asis"}
+cat(sprintf('
+### Compliance assessment (wetland monitoring)
+
+For monitoring projects, each metric was assessed against a compliance band
+fixed from the **baseline year**. The band is an absolute **±%d**% of the
+baseline value for cover metrics (in percentage points) and
+**±⌈%d%% × baseline count⌉** species for richness (rounded up to the
+nearest whole species). Both plot-level and wetland-level values were evaluated.
+
+A wetland is considered to be trending toward **non-compliance** where a metric
+moves past the band in the adverse direction for that metric: a **decrease**
+below the lower bound for vegetation cover, native cover, and species richness;
+an **increase** above the upper bound for invasive and bare-ground cover.
+Movement in the favourable direction (for example, increased desirable cover) is
+not a compliance exceedance.
+', band_pct, band_pct))
+```
+
+### Source references
+
+Citations resolve to `source_id` entries in `data/references.rda`:
+
+| In-text citation | `source_id` |
+|---|---|
+| Alberta Wetland Plant List (2021) | `ab_wetland_plant_list_2021` |
+| National Wetland Plant List (NWPL) | `usace_nwpl_2018` |
+| Indicator rating definitions (USACE 2018) | `usace_nwpl_2018`, `lichvar_2012` |
+| AWCS (GoA 2015a) | `goa_awcs_2015` |
+| AWIDD (GoA 2015b) | `goa_awidd` |
+| ANPC (2023) | `anpc_2023` |
+| AISC (2022) | `aisc_2022` |
+| *Weed Control Act* (GoA 2023) | `wca_2023` |
+| 50/20 methodology (USDA 2007) | `usda_2007` |
+| Prevalence index (Wakeley & Lichvar 1997) | `wakeley_lichvar_1997` |
+| Prevalence index clarification (De Steven 2015) | `de_steven_2015` |
