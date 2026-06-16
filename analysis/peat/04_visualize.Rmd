@@ -7,6 +7,7 @@ params:
   approved_boundary: "data-raw/projects/approved_harvest_area.shp"
   ownership_boundary: "data-raw/projects/ownership_boundary.shp"
   basemap: false           # TRUE to fetch an Esri World Imagery backdrop (needs maptiles + internet)
+  section_holes: "PL17, PL16, PL15, PL21, PL09, PL04, PL05, PL01"  # ordered transect for the cross-section
   output_dir: "reports/figures"
 ---
 
@@ -124,6 +125,69 @@ p_prof_recl <- p_prof +
 p_prof_recl
 ggsave(here(params$output_dir, paste0(params$project_id, "_peat_profiles_reclamation.png")),
        p_prof_recl, width = 9, height = 5, dpi = 300)
+```
+
+## Cross-section (stratigraphic fence of logged test holes)
+
+A vertical section along a chosen transect of test holes (`params$section_holes`).
+Each hole is drawn as its **real logged grade column** at its true along-transect
+distance; the surface (0) and the mineral base are connected between holes. The
+ground between holes is left blank — this is honest logged stratigraphy, not
+depth-resolved interpolation (Von Post flips with depth, so grade-at-depth is not
+interpolated; see DESIGN).
+
+```{r fig-cross-section, fig.height=5}
+sec_ids <- trimws(strsplit(params$section_holes, ",")[[1]])
+sec_ids <- sec_ids[sec_ids != ""]
+
+# Chosen holes in transect order, with coordinates and total depth.
+sec_xy <- hole_summary |>
+  distinct(plot_id, gps_easting, gps_northing, mineral_depth_cm)
+sec_xy <- sec_xy[match(sec_ids, sec_xy$plot_id), ]
+if (anyNA(sec_xy$gps_easting))
+  stop("section_holes not found in data: ",
+       paste(sec_ids[is.na(sec_xy$gps_easting)], collapse = ", "))
+
+# Cumulative straight-line distance along the polyline through the holes (m).
+sec_xy$dist_m <- cumsum(c(0, sqrt(diff(sec_xy$gps_easting)^2 +
+                                  diff(sec_xy$gps_northing)^2)))
+
+# Real logged intervals for those holes, classified to the same grade palette.
+sec_intervals <- intervals |>
+  filter(plot_id %in% sec_ids) |>
+  mutate(grade = dplyr::case_when(
+           !is.na(band)                                      ~ band,
+           grepl(forest_floor_pat, toupper(trimws(horizon))) ~ "forest_floor",
+           TRUE                                              ~ "mineral"),
+         grade = factor(grade, levels = grade_levels)) |>
+  left_join(sec_xy[, c("plot_id", "dist_m")], by = "plot_id")
+
+bar_w <- 0.012 * max(sec_xy$dist_m)   # core column half-width (m)
+
+p_section <- ggplot() +
+  geom_hline(yintercept = 0, colour = "grey40", linewidth = 0.4) +          # surface
+  geom_line(data = sec_xy, aes(x = dist_m, y = -mineral_depth_cm),          # mineral base
+            colour = "grey40", linetype = "dashed") +
+  geom_rect(data = sec_intervals,                                           # logged cores
+            aes(xmin = dist_m - bar_w, xmax = dist_m + bar_w,
+                ymin = -depth_bot_cm, ymax = -depth_top_cm, fill = grade)) +
+  geom_text(data = sec_xy, aes(x = dist_m, y = 20, label = plot_id),
+            angle = 90, hjust = 0, size = 2.6) +
+  scale_fill_manual(values = band_cols, name = "Layer", drop = FALSE,
+                    labels = c(professional = "Professional (H1-H4)",
+                               retail = "Retail (H5-H6)",
+                               non_saleable = "Non-saleable (H7-H10)",
+                               forest_floor = "Forest floor (LFH)",
+                               mineral = "Mineral substrate (C)")) +
+  scale_y_continuous(labels = ~ abs(.), expand = expansion(mult = c(0.04, 0.22))) +
+  labs(title = "Peat Cross-Section (logged test holes along transect)",
+       subtitle = paste(sec_ids, collapse = " → "),
+       x = "Distance along transect (m)", y = "Depth (cm)") +
+  theme_bw()
+
+p_section
+ggsave(here(params$output_dir, paste0(params$project_id, "_peat_cross_section.png")),
+       p_section, width = 10, height = 5, dpi = 300)
 ```
 
 ## Harvestable thickness per hole
