@@ -104,18 +104,22 @@ it can be compared against the plain profiles above.
 ```{r fig-profiles-reclamation, fig.height=6}
 reclaim_cm  <- round(stats::median(intervals$mineral_depth_cm - intervals$recl_line_cm))
 plot_levels <- sort(unique(intervals$plot_id))
+recl_label  <- paste0(reclaim_cm, " cm reclamation buffer")
 recl_lines  <- intervals |>
   distinct(plot_id, recl_line_cm) |>
   mutate(xpos = match(plot_id, plot_levels),
          y    = -pmax(recl_line_cm, 0))   # clamp shallow holes to the surface
 
+# Map the line to a linetype aesthetic so it gets its own legend entry (drawn
+# red via override.aes), rather than explaining it in a subtitle.
 p_prof_recl <- p_prof +
   geom_segment(data = recl_lines, inherit.aes = FALSE,
-               aes(x = xpos - 0.45, xend = xpos + 0.45, y = y, yend = y),
-               colour = "red", linetype = "dashed", linewidth = 0.7) +
-  labs(title = "Peat Profiles by Grade with Reclamation Buffer",
-       subtitle = paste0("Dashed red line = base of the harvestable column; the ",
-                         "deepest ", reclaim_cm, " cm is left for reclamation"))
+               aes(x = xpos - 0.45, xend = xpos + 0.45, y = y, yend = y,
+                   linetype = recl_label),
+               colour = "red", linewidth = 0.7) +
+  scale_linetype_manual(name = NULL, values = setNames("dashed", recl_label),
+                        guide = guide_legend(override.aes = list(colour = "red"))) +
+  labs(title = "Peat Profiles by Grade with Reclamation Buffer")
 
 p_prof_recl
 ggsave(here(params$output_dir, paste0(params$project_id, "_peat_profiles_reclamation.png")),
@@ -187,6 +191,14 @@ plot_surface <- function(nm, title, contour = FALSE) {
   terra::plot(pts_v, add = TRUE, col = "black", pch = 21, bg = "white", cex = 1.1)
   terra::text(pts_v, labels = "plot_id", pos = 3, cex = 0.55,
               halo = TRUE, hc = "white", hw = 0.2)
+
+  # Boundary legend (the red / grey outlines on the map). Use terra::add_legend,
+  # which targets the map panel — base legend() does not survive terra's
+  # colour-bar layout and renders into the wrong region.
+  terra::add_legend("bottomleft",
+    legend = c("Reno Exploration Lands", "Tactful Developments Ltd. Boundary"),
+    col = c("red", "grey20"), lwd = c(2, 1), lty = 1,
+    bg = "white", box.col = "grey70", cex = 0.7)
 }
 
 save_map <- function(nm, title, suffix = "", contour = FALSE) {
