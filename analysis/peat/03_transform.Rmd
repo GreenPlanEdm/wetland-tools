@@ -115,6 +115,28 @@ hole_summary |>
          nonsaleable_cm, commercial_reclaim_cm)
 ```
 
+## Add upland holes as 0-thickness control points
+
+Test holes classed **Upland** have no peat profile, so they never appear in the
+per-hole summary above. We add them back as explicit **0-thickness anchors** so
+the interpolation drops toward zero at these known non-peat locations instead of
+extrapolating peat into them.
+
+```{r upland-anchors}
+upland_anchors <- plots |>
+  filter(awcs_wetland_class %in% "Upland", !plot_id %in% hole_summary$plot_id) |>
+  mutate(mineral_depth_cm = 0,
+         prof_harv_cm = 0, retail_harv_cm = 0,
+         nonsaleable_cm = 0, commercial_reclaim_cm = 0,
+         prof_harv_m = 0, retail_harv_m = 0,
+         nonsaleable_m = 0, commercial_reclaim_m = 0)
+
+hole_summary <- bind_rows(hole_summary, upland_anchors)
+
+cat(nrow(upland_anchors), "upland 0-thickness anchor(s) added:",
+    if (nrow(upland_anchors)) paste(upland_anchors$plot_id, collapse = ", ") else "none", "\n")
+```
+
 ## Build spatial points (handles both UTM zones)
 
 ```{r points}
