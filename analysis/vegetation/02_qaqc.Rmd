@@ -26,24 +26,45 @@ load(here("data", "invasive_species.rda"))
 load(here("data", "anpc_wetland_species.rda"))
 ```
 
+## Reduce species names to binomial
+
+Species names are reduced to their **binomial** (genus + specific epithet)
+before any reference lookup. The AWCS list stores names *with* taxonomic
+authorities (e.g. `"Betula papyrifera Marsh."`), whereas the WI list and the
+field forms use the bare binomial (`"Betula papyrifera"`). Without this
+reduction every species fails the AWCS match and is dropped. The binomial is
+written back to `scientific_name` so the cleaned output and all downstream joins
+use one consistent form. Non-vegetation rows (blank / `"-"` names) are
+unaffected.
+
+```{r binomial-names}
+# Keep the first two whitespace-separated tokens; 1-token / blank / NA names
+# pass through unchanged (sub returns the input when the pattern doesn't match).
+to_binomial <- function(x) sub("^(\\S+\\s+\\S+).*$", "\\1", trimws(x))
+
+veg <- veg |> mutate(scientific_name = to_binomial(scientific_name))
+```
+
 # Species sheet QA
 
 ## Flag: species not in reference tables
 
 Species are identified by `scientific_name` (the Latin binomial), which is the
-join key for every reference table in `03_transform.Rmd`. A species must resolve
-in the two reference tables — `awcs_wetland_species` (AWCS class/indicator
-assignments) and `wetland_indicator_status` (the regional WI status lookup).
-Anything missing from either is flagged here so the field crew can correct the
-record (e.g. a misspelt binomial) or extend the reference table before transform
-runs. Non-vegetation rows (bare ground / litter, marked by a blank
-`scientific_name`) are excluded from this check.
+join key for every reference table in `03_transform.Rmd`. Each species is
+checked against the two reference tables — `awcs_wetland_species` (AWCS
+class/indicator assignments) and `wetland_indicator_status` (the regional WI
+status lookup) — on binomial names (reference names are reduced to binomial the
+same way). A species missing from either is flagged, and `missing_in` records
+*which* table(s) it was absent from, so the field crew can correct the record
+(e.g. a misspelt binomial) or extend the reference table before transform runs.
+Non-vegetation rows (bare ground / litter, marked by a blank `scientific_name`)
+are excluded from this check.
 
 ```{r flag-species}
 norm <- function(x) toupper(trimws(x))
 
-known_awcs_names <- norm(awcs_wetland_species$scientific_name)
-known_wi_names   <- norm(wetland_indicator_status$scientific_name)
+known_awcs_names <- norm(to_binomial(awcs_wetland_species$scientific_name))
+known_wi_names   <- norm(to_binomial(wetland_indicator_status$scientific_name))
 
 veg_flag_species <- veg |>
   filter(!is.na(scientific_name) & !norm(scientific_name) %in% c("", "-")) |>
@@ -216,14 +237,29 @@ if (nrow(plots_flags)) print(table(plots_flags$flag))
 
 # Save QA/QC outputs
 
-Species: flagged rows are excluded from `_veg_clean.rds` so downstream
-joins and aggregations don't pick them up. Plots: nothing is dropped
-from `_plots_clean.rds` — review the flags CSV and re-transcribe as
-needed.
+**Species drop policy.** Only *hard* problems are removed from
+`_veg_clean.rds`: out-of-range cover, missing required fields, orphan rows, and
+species absent from the **WI list** (whose indicator status the determination
+needs). Species present in the WI list but absent from the **AWCS** indicator
+list are *flagged* (for the Appendix A AWCS-only annotation) but **retained** —
+AWCS is a curated indicator-species list, not a full flora, so absence there is
+informational, not a reason to discard valid data. All flags (including
+AWCS-only) are still written to the flags CSV. Plots: nothing is dropped from
+`_plots_clean.rds` — review the flags CSV and re-transcribe as needed.
 
 ```{r save}
-veg_clean   <- veg   |> anti_join(veg_flags, by = names(veg))
+# Species absent from the WI list (missing_in mentions "WI list", i.e. WI-only
+# or missing-from-both) are dropped; AWCS-only absences are kept.
+species_drop <- veg_flag_species |> filter(grepl("WI list", missing_in, fixed = TRUE))
+veg_drop     <- bind_rows(species_drop, veg_flag_cover, veg_flag_missing, veg_flag_orphan)
+
+veg_clean   <- veg   |> anti_join(veg_drop, by = names(veg))
 plots_clean <- plots                                     # not filtered
+
+message("Species flagged: ", nrow(veg_flags), " | dropped from clean: ",
+        nrow(distinct(veg_drop, across(all_of(names(veg))))),
+        " | AWCS-only (flagged, kept): ",
+        nrow(filter(veg_flag_species, !grepl("WI list", missing_in, fixed = TRUE))))
 
 saveRDS(veg_clean,   here("data-raw", paste0(params$project_id, "_veg_clean.rds")))
 saveRDS(plots_clean, here("data-raw", paste0(params$project_id, "_plots_clean.rds")))
