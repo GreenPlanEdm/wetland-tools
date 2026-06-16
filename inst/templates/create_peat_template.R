@@ -44,13 +44,17 @@ dv_list <- function(sheet, col_idx, choices) {
 # AWCS wetland class-and-form vocabulary — first column of
 # data-raw/Ecosite_to_WetClass.csv. Keeps the dropdown traceable to the
 # project's reference data (AWCS). Edit there + here if the list changes.
+# "Upland" is appended as a non-wetland option (not an AWCS wetland class) so a
+# test hole sited in an upland area can be recorded as such; 02_qaqc.Rmd accepts
+# it the same way.
 awcs_classes <- c(
   "Wooded Bog", "Shrubby Bog",
   "Wooded Fen", "Shrubby Fen", "Graminoid Fen",
   "Graminoid Marsh",
   "Submersed/Floating Shallow Open Water",
   "Coniferous Wooded Swamp", "Mixedwood Wooded Swamp",
-  "Deciduous Wooded Swamp", "Shrubby Swamp"
+  "Deciduous Wooded Swamp", "Shrubby Swamp",
+  "Upland"
 )
 
 
@@ -239,7 +243,7 @@ readme <- as.data.frame(rbind(
     paste(
       "project_id / plot_id: identifiers (plot_id is the primary key for the test hole) |",
       "crew: field crew names |",
-      "awcs_wetland_class: AWCS class-and-form from the dropdown (Bog / Fen / Marsh / Swamp / Shallow Open Water variants) |",
+      "awcs_wetland_class: AWCS class-and-form from the dropdown (Bog / Fen / Marsh / Swamp / Shallow Open Water variants, or Upland for a non-wetland test hole) |",
       "utm_zone: UTM zone 11N or 12N (NAD83) |",
       "gps_easting / gps_northing: UTM coordinates in the zone above |",
       "elevation_m: ground elevation above sea level (m) |",

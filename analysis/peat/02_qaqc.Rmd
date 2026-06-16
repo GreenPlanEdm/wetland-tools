@@ -25,6 +25,10 @@ ecosite_wetclass <- read.csv(
 valid_classes <- trimws(ecosite_wetclass[[1]])          # first column = AWCS class/form
 valid_classes <- valid_classes[valid_classes != "" &
                                  valid_classes != "AB Wetland Classification Class and Form"]
+# "Upland" is a valid non-wetland designation for a test hole sited outside a
+# wetland. It is not an AWCS class, so add it explicitly to match the form's
+# dropdown (inst/templates/create_peat_template.R).
+valid_classes <- c(valid_classes, "Upland")
 ```
 
 > **Note on non-monotonic cores.** Von Post H values legitimately flip with
