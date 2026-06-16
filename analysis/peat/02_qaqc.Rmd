@@ -38,9 +38,13 @@ valid_classes <- c(valid_classes, "Upland")
 ## Flag: inverted or non-contiguous interval depths
 
 ```{r flag-depths}
-# Within each hole, intervals must start at 0 and be contiguous:
+# Within each hole, the sub-surface intervals must start at 0 and be contiguous:
 #   each depth_top_cm == previous depth_bot_cm, and depth_top < depth_bot.
+# Forest-floor (LFH and L/F/H folic) horizons are recorded as thickness ABOVE
+# the surface (e.g. 15 -> 0), so they are exempt from the inversion/contiguity
+# rules and excluded from the depth sequence below.
 depth_checked <- horizons |>
+  filter(!grepl("^(LFH|LF|FH|L|F|H)$", toupper(trimws(horizon)))) |>
   arrange(plot_id, depth_top_cm) |>
   group_by(plot_id) |>
   mutate(prev_bot   = lag(depth_bot_cm),
@@ -63,8 +67,12 @@ bind_rows(flag_inverted, flag_gap) |> select(plot_id, depth_top_cm, depth_bot_cm
 ```{r flag-vonpost}
 valid_vp <- von_post |> pull(von_post_code)
 
+# Von Post humification applies only to organic PEAT horizons (Of/Om/Oh, ...).
+# Mineral (C/Cg, A/B) and forest-floor (LFH) horizons have no humification value,
+# so a blank von_post on them is expected, not an error.
 flag_vp_missing <- horizons |>
-  filter(is.na(von_post) | von_post == "") |>
+  filter(grepl("^O", toupper(trimws(horizon))),
+         is.na(von_post) | von_post == "") |>
   mutate(flag = "MISSING_VON_POST")
 
 flag_vp_invalid <- horizons |>
@@ -123,8 +131,11 @@ flag_orphan_horizon <- horizons |>
   filter(!plot_id %in% holes_in_plots) |>
   mutate(flag = "HORIZON_WITHOUT_PLOT")
 
+# An upland test hole has no peat profile by design, so absence of horizons is
+# expected there — don't flag plots classed "Upland".
 flag_plot_no_horizon <- plots |>
-  filter(!plot_id %in% holes_in_horizons) |>
+  filter(!plot_id %in% holes_in_horizons,
+         !(awcs_wetland_class %in% "Upland")) |>
   mutate(flag = "PLOT_WITHOUT_HORIZONS")
 
 bind_rows(
