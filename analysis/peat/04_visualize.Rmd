@@ -31,6 +31,19 @@ volumes      <- readRDS(here("data-raw", paste0(params$project_id, "_peat_volume
 ownership <- st_read(here(params$ownership_boundary), quiet = TRUE)
 approved  <- st_transform(st_read(here(params$approved_boundary), quiet = TRUE),
                           st_crs(ownership))
+
+# Test-hole points in the analysis (ownership) CRS, for overlaying on the maps.
+# Split by UTM zone so each gets the right CRS, then reproject to the map CRS.
+make_points <- function(df, zone, epsg) {
+  sub <- dplyr::filter(df, utm_zone == zone)
+  if (nrow(sub) == 0) return(NULL)
+  st_as_sf(sub, coords = c("gps_easting", "gps_northing"), crs = epsg, remove = FALSE)
+}
+pts <- dplyr::bind_rows(
+  { p <- make_points(hole_summary, "11N", 26911); if (!is.null(p)) st_transform(p, st_crs(ownership)) },
+  { p <- make_points(hole_summary, "12N", 26912); if (!is.null(p)) st_transform(p, st_crs(ownership)) }
+)
+pts_v <- terra::vect(pts)
 ```
 
 ## Volume summary table
@@ -123,6 +136,11 @@ plot_surface <- function(nm, title) {
   }
   terra::plot(terra::vect(ownership), border = "grey20", lwd = 1, add = TRUE)
   terra::plot(terra::vect(approved),  border = "red",    lwd = 2, add = TRUE)
+
+  # Test holes, labelled with plot_id so the map ties back to the profile chart.
+  terra::plot(pts_v, add = TRUE, col = "black", pch = 21, bg = "white", cex = 1.1)
+  terra::text(pts_v, labels = "plot_id", pos = 3, cex = 0.55,
+              halo = TRUE, hc = "white", hw = 0.2)
 }
 
 png(here(params$output_dir, paste0(params$project_id, "_map_professional.png")),
