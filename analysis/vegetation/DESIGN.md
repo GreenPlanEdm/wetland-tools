@@ -114,16 +114,21 @@ native/exotic, richness).
 its stratum. Hydrophytic indicator statuses are OBL, FACW, FAC.
 
 1. **Method 1 — dominance of identified dominants.** If > 50% of the dominant
-   species across all strata are OBL/FACW/FAC, the plot is a wetland.
-2. **Method 2 — 50/20 rule (USDA 2007).** If *no* dominants were identified,
-   pick dominants via the 50/20 rule (rank species by cover descending within
-   stratum; take species cumulatively to 50%, plus any other species > 20%),
-   then apply the dominance test. An exact 50% tie falls to Method 3.
+   species across all strata are OBL/FACW/FAC, the plot is a wetland; < 50%,
+   upland. An exact 50% tie cascades to Method 2.
+2. **Method 2 — 50/20 rule (USDA 2007).** Applied if *no* dominants were
+   identified **or** Method 1 tied. Pick dominants via the 50/20 rule (rank
+   species by cover descending within stratum; take species cumulatively to 50%,
+   plus any other species > 20%), then apply the dominance test. > 50% wetland,
+   < 50% upland; an exact 50% tie cascades to Method 3.
 3. **Method 3 — prevalence index (Wakeley & Lichvar 1997).**
-   `PI = Σ(cover_i × wi_numeric_i) / Σ(cover_i)`. `PI < 3` ⇒ wetland.
+   `PI = Σ(cover_i × wi_numeric_i) / Σ(cover_i)`. `PI < 3` ⇒ wetland, else upland.
+   The final fail-safe — it cannot tie.
 
-Record which method produced the call (`deciding_method`) so every
-determination is auditable.
+The three methods form a **cascade of fail-safes**: each is decisive unless its
+dominance test lands on an exact 50/50 tie, in which case the next method runs.
+Record which method produced the call (`deciding_method`) so every determination
+is auditable.
 
 **% hydrophytic vegetation** (the headline monitoring metric / `Dominance_Plot`
 y-axis): `(# dominant species that are OBL/FACW/FAC) / (# dominant species) × 100`.

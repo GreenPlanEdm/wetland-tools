@@ -86,24 +86,30 @@ Wetland Classification System (AWCS; GoA 2015a) are noted in Appendix A (e.g.
 ### Hydrophytic vegetation and wetland determination
 
 To determine whether a plot was located within a wetland, a **tiered approach
-involving three methods** was applied. Method 1 was applied first; Methods 2 and
-3 were employed sequentially only where the preceding method did not yield a
-conclusive result.
+involving three methods** was applied as a cascade of fail-safes. Method 1 was
+applied first; Methods 2 and 3 were employed sequentially only where the
+preceding method did not yield a conclusive result — that is, where its
+dominance test produced an exact 50% tie.
 
-1. **Dominance of identified dominants.** If more than 50% of the dominant
-   species across all strata are obligate (OBL), facultative wetland (FACW), or
-   facultative (FAC), the plot is considered to occur within a wetland.
+1. **Dominance of identified dominants.** Where dominant species were identified
+   (the 20% rule), the plot was classed on them: if more than 50% of the
+   dominant species across all strata are obligate (OBL), facultative wetland
+   (FACW), or facultative (FAC), the plot is considered to occur within a
+   wetland; if fewer than 50% are, it is considered upland. An exact 50% split
+   is treated as a tie and resolved by Method 2.
 
-2. **50/20 dominance methodology (USDA 2007).** If no dominant species were
-   identified in the plot, the 50/20 methodology was implemented to determine
-   dominance — ranking species by percent cover within each stratum, selecting
-   species cumulatively until 50% of the stratum total is reached, plus any
-   additional species exceeding 20% cover — and the dominance test re-applied.
-   Where this produced a tie on the 50% dominance test, Method 3 was run.
+2. **50/20 dominance methodology (USDA 2007).** Where no dominant species were
+   identified, or Method 1 produced a 50% tie, the 50/20 methodology was
+   implemented to (re-)determine dominance — ranking species by percent cover
+   within each stratum, selecting species cumulatively until 50% of the stratum
+   total is reached, plus any additional species exceeding 20% cover — and the
+   dominance test applied to that dominant set. A result above 50% indicates a
+   wetland and below 50% an upland; where this again produced a 50% tie, Method 3
+   was run.
 
-3. **Prevalence index (Wakeley & Lichvar 1997).** The prevalence index (PI)
-   was calculated to resolve the tied dominance test of Method 2 (see also
-   De Steven 2015):
+3. **Prevalence index (Wakeley & Lichvar 1997).** The prevalence index (PI) was
+   calculated to resolve a dominance test that remained tied at Method 2 (see
+   also De Steven 2015):
 
    $$ PI = \frac{\sum_{i} A_i \, w_i}{\sum_{i} A_i} $$
 
