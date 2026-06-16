@@ -183,8 +183,11 @@ plot_surface <- function(nm, title, contour = FALSE) {
   terra::plot(terra::vect(approved),  border = "red",    lwd = 2, add = TRUE)
 
   if (contour) {
-    terra::contour(r, add = TRUE, levels = lev,
-                   col = "#b5835a", lwd = 0.7, labcex = 0.6)   # light brown lines + labels
+    # White lines and labels read well across the viridis range (low dark to high
+    # bright); only the brightest yellow caps are marginal, and the haloed
+    # plot_id point labels remain the primary reference markers.
+    terra::contour(r, add = TRUE, levels = lev, col = "white",
+                   lwd = 0.8, labcex = 0.7, drawlabels = TRUE)
   }
 
   # Test holes, labelled with plot_id so the map ties back to the profile chart.
