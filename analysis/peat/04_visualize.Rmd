@@ -96,36 +96,10 @@ knitr::kable(
                    "commercial grades are net of the reclamation allowance only."))
 ```
 
-## Net harvestable peat (after setbacks & infrastructure)
-
-```{r tbl-harvestable}
-harv_path <- here("data-raw", paste0(params$project_id, "_peat_harvestable.rds"))
-if (file.exists(harv_path)) {
-  knitr::kable(
-    readRDS(harv_path),
-    col.names = c("Product", "Approved area (m³)", "Ownership area (m³)"),
-    format.args = list(big.mark = ","),
-    caption = paste0("Net harvestable commercial peat — ", params$project_id,
-                     ". Professional/retail surfaces integrated over the harvestable ",
-                     "area (boundary minus setbacks minus existing infrastructure). ",
-                     "Harvestable + excluded reconciles to the commercial in-place totals."))
-} else {
-  cat("_No harvestable table found — re-run 03_transform to generate it._")
-}
-```
-
-```{r note-harvestable, results='asis'}
-cat(sprintf("
-*Notes on the table above (to accompany it in the report):*
-
-- **Excluded — waterbody setback** is the professional + retail peat lying within the %d m waterbody setback that would become harvestable if that setback were reduced or removed. It is calculated as the *marginal* effect of the waterbody setback: harvestable commercial volume with every other exclusion applied **except** the waterbody setback, minus harvestable volume with **all** exclusions applied. It is reported on its own line because the waterbody setback is the exclusion most likely to change.
-- **Excluded — other setbacks & infrastructure** is the remaining commercial peat removed by the boundary setback, roads, and utilities (commercial in-place, minus the two harvestable rows, minus the waterbody-setback row).
-- The two harvestable rows plus the two excluded rows sum to the commercial (professional + retail) in-place resource for each area.
-- **Waterbody setback area.** A %d m buffer is applied around every waterbody — both polygon waterbodies (lakes/ponds, buffered outward) and polyline waterbodies (creeks/streams, buffered to a corridor each side) — and the buffered area is removed from the harvestable area everywhere, including the previously approved lands.
-",
-  as.integer(params$waterbody_setback_m),
-  as.integer(params$waterbody_setback_m)))
-```
+_The net harvestable peat table — with bootstrap uncertainty intervals on the
+harvestable rows, the waterbody/other excluded split, and accompanying notes — is
+produced in `05_uncertainty.Rmd` so it carries its uncertainty range. See that
+step's output for the report-ready table._
 
 ## Assumptions and limitations
 

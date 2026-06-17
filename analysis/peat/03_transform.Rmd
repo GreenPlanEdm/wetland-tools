@@ -459,6 +459,12 @@ saveRDS(harvestable,        here("data-raw", paste0(params$project_id, "_peat_ha
 saveRDS(exclusions_applied, here("data-raw", paste0(params$project_id, "_peat_exclusions.rds")))
 if (!is.null(exclusion_zones))
   saveRDS(exclusion_zones,  here("data-raw", paste0(params$project_id, "_peat_exclusion_zones.rds")))
+
+# Grid settings + harvestable regions, so 05_uncertainty reuses the exact same
+# interpolation grid and clip geometry (single source of truth).
+saveRDS(list(res_m = res_m, radius = radius, idw_power = params$idw_power,
+             approved_harv = approved_harv, ownership_harv = ownership_harv),
+        here("data-raw", paste0(params$project_id, "_peat_geom.rds")))
 write.csv(harvestable,
           here("data-raw", paste0(params$project_id, "_peat_harvestable.csv")),
           row.names = FALSE)

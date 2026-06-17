@@ -19,10 +19,13 @@ library(here)
 #'   distances, ...). Only entries a given step declares are passed to it, so
 #'   you can supply the full set once and it is routed correctly. Anything not
 #'   supplied falls back to the Rmd's own default.
-#' @param steps Which steps to render, as indices into the four-step sequence
-#'   (default all). e.g. steps = 3:4 re-runs only transform + visualize.
-run_peat_pipeline <- function(project_id, config = list(), steps = 1:4) {
-  rmds <- c("01_ingest.Rmd", "02_qaqc.Rmd", "03_transform.Rmd", "04_visualize.Rmd")
+#' @param steps Which steps to render, as indices into the five-step sequence
+#'   (default all). e.g. steps = 3:4 re-runs only transform + visualize; steps =
+#'   1:4 skips the heavier bootstrap in 05_uncertainty.
+run_peat_pipeline <- function(project_id, config = list(), steps = NULL) {
+  rmds <- c("01_ingest.Rmd", "02_qaqc.Rmd", "03_transform.Rmd",
+            "04_visualize.Rmd", "05_uncertainty.Rmd")
+  if (is.null(steps)) steps <- seq_along(rmds)
   all_params <- c(list(project_id = project_id), config)
 
   for (i in steps) {
