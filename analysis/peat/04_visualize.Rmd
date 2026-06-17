@@ -6,6 +6,13 @@ params:
   project_id: "PROJECT_ID"
   approved_boundary: "data-raw/projects/approved_harvest_area.shp"
   ownership_boundary: "data-raw/projects/ownership_boundary.shp"
+  roads_boundary: ""       # optional; drawn on the thickness maps (comma-separated paths ok)
+  waterbodies_boundary: "" # optional; polygons and/or lines drawn on the thickness maps
+  boundary_setback_m: 30   # for the assumptions text — must match the value used in 03_transform
+  waterbody_setback_m: 45  # for the assumptions text — must match 03_transform
+  road_half_width_m: 6     # for the assumptions text — must match 03_transform (12 m road = 6 m half-width)
+  road_buffer_m: 5         # for the assumptions text — must match 03_transform
+  utility_buffer_m: 30     # for the assumptions text — must match 03_transform
   basemap: false           # TRUE to fetch an Esri World Imagery backdrop (needs maptiles + internet)
   section_holes: "PL17, PL16, PL15, PL21, PL09, PL04, PL05, PL01"  # ordered transect for the cross-section
   output_dir: "reports/figures"
@@ -45,6 +52,36 @@ pts <- dplyr::bind_rows(
   { p <- make_points(hole_summary, "12N", 26912); if (!is.null(p)) st_transform(p, st_crs(ownership)) }
 )
 pts_v <- terra::vect(pts)
+
+# Optional overlay layers for the maps (roads, waterbodies). Each param accepts
+# one or more comma-separated shapefiles; we pull out geometries by type so they
+# can be styled differently (waterbody polygons filled, lines drawn as lines).
+# Returns a terra SpatVector, or NULL when nothing matches (so the maps still
+# render on projects without these data).
+gather_v <- function(paths_csv, want = NULL) {
+  if (is.null(paths_csv) || !nzchar(paths_csv)) return(NULL)
+  parts <- trimws(strsplit(paths_csv, ",")[[1]]); parts <- parts[parts != ""]
+  geoms <- list()
+  for (p in parts) {
+    if (!file.exists(here(p))) next
+    g  <- st_transform(st_read(here(p), quiet = TRUE), st_crs(ownership))
+    gt <- as.character(st_geometry_type(g))
+    keep <- if (is.null(want)) rep(TRUE, length(gt)) else grepl(want, gt)
+    if (any(keep)) geoms[[length(geoms) + 1]] <- st_geometry(g)[keep]
+  }
+  if (!length(geoms)) return(NULL)
+  terra::vect(st_sf(geometry = do.call(c, geoms)))
+}
+roads_v      <- gather_v(params$roads_boundary,      "LINE")
+water_poly_v <- gather_v(params$waterbodies_boundary, "POLY")
+water_line_v <- gather_v(params$waterbodies_boundary, "LINE")
+
+# Buffered exclusion zones (saved by 03_transform), labelled by layer, for the
+# setback-comparison map set. Colours keyed to the associated layer.
+zones_path <- here("data-raw", paste0(params$project_id, "_peat_exclusion_zones.rds"))
+exclusion_zones <- if (file.exists(zones_path)) readRDS(zones_path) else NULL
+zone_cols <- c(boundary = "#7570b3", waterbody = "#08519c",
+               road = "#543005", utility = "#e6550d")
 ```
 
 ## Volume summary table
@@ -54,8 +91,74 @@ knitr::kable(
   volumes,
   col.names = c("Product", "Approved area (m³)", "Ownership area (m³)"),
   format.args = list(big.mark = ","),
-  caption = paste0("Estimated peat volumes — ", params$project_id,
-                   ". Harvestable values are net of the reclamation allowance."))
+  caption = paste0("In-place peat resource — ", params$project_id,
+                   ". The geological partition over the full boundaries; ",
+                   "commercial grades are net of the reclamation allowance only."))
+```
+
+## Net harvestable peat (after setbacks & infrastructure)
+
+```{r tbl-harvestable}
+harv_path <- here("data-raw", paste0(params$project_id, "_peat_harvestable.rds"))
+if (file.exists(harv_path)) {
+  knitr::kable(
+    readRDS(harv_path),
+    col.names = c("Product", "Approved area (m³)", "Ownership area (m³)"),
+    format.args = list(big.mark = ","),
+    caption = paste0("Net harvestable commercial peat — ", params$project_id,
+                     ". Professional/retail surfaces integrated over the harvestable ",
+                     "area (boundary minus setbacks minus existing infrastructure). ",
+                     "Harvestable + excluded reconciles to the commercial in-place totals."))
+} else {
+  cat("_No harvestable table found — re-run 03_transform to generate it._")
+}
+```
+
+```{r note-harvestable, results='asis'}
+cat(sprintf("
+*Notes on the table above (to accompany it in the report):*
+
+- **Excluded — waterbody setback** is the professional + retail peat lying within the %d m waterbody setback that would become harvestable if that setback were reduced or removed. It is calculated as the *marginal* effect of the waterbody setback: harvestable commercial volume with every other exclusion applied **except** the waterbody setback, minus harvestable volume with **all** exclusions applied. It is reported on its own line because the waterbody setback is the exclusion most likely to change.
+- **Excluded — other setbacks & infrastructure** is the remaining commercial peat removed by the boundary setback, roads, and utilities (commercial in-place, minus the two harvestable rows, minus the waterbody-setback row).
+- The two harvestable rows plus the two excluded rows sum to the commercial (professional + retail) in-place resource for each area.
+- **Waterbody setback area.** A %d m buffer is applied around every waterbody — both polygon waterbodies (lakes/ponds, buffered outward) and polyline waterbodies (creeks/streams, buffered to a corridor each side) — and the buffered area is removed from the harvestable area everywhere, including the previously approved lands.
+",
+  as.integer(params$waterbody_setback_m),
+  as.integer(params$waterbody_setback_m)))
+```
+
+## Assumptions and limitations
+
+```{r assumptions, results='asis'}
+excl_path <- here("data-raw", paste0(params$project_id, "_peat_exclusions.rds"))
+
+cat(sprintf("
+**Harvest setbacks.** Reported harvestable volumes exclude regulatory and operational setbacks as follows:
+
+- The **previously approved harvest area** is assumed to already incorporate its required boundary setback; no additional boundary setback is applied to it.
+- The **expansion area** (remainder of the property, which would require a new approval) is assumed to require a **%d m harvest setback** from the property boundary.
+- A **%d m setback from waterbodies** is applied throughout the study area, **including the previously approved lands** — applied conservatively because any *Water Act* approval over the approved lands may have expired and require updating under current conditions. Both polygon waterbodies (lakes/ponds) and polyline waterbodies (creeks/permanent streams) receive this setback.
+
+These setback distances reflect the conditions applicable to **public land**. If the property is **private**, the applicable setbacks may differ; this can be amended in a future report if required.
+
+**Existing infrastructure.** Peat beneath existing roads (constructed as fill/corduroy over intact peat) is present but not harvestable. Road centrelines are buffered to the **%d m** running width, plus a **%d m** operational setback (ditch/shoulder/stability), and that footprint is excluded from harvestable volume.
+
+**Utilities.** A standard **%d m** buffer is applied around all utilities — pipelines, utility corridors, and well heads/pads — and the buffered area is excluded from harvestable volume.
+
+**Method note.** Setbacks and infrastructure are applied only when integrating volume; the interpolated peat-thickness surfaces are not altered (peat is physically continuous beneath roads and within setbacks). Volumes are integrated by fractional cell coverage, so exclusions narrower than the grid cell (e.g. a road corridor) are captured proportionally rather than missed.
+",
+  as.integer(params$boundary_setback_m),
+  as.integer(params$waterbody_setback_m),
+  as.integer(2 * params$road_half_width_m),
+  as.integer(params$road_buffer_m),
+  as.integer(params$utility_buffer_m)))
+
+if (file.exists(excl_path)) {
+  ex <- readRDS(excl_path)
+  ex$applied <- ifelse(ex$applied, "applied", "**not applied — no layer supplied**")
+  cat("\n\n**Exclusions applied in this run** (the figures above reflect only the rows marked *applied*):\n\n")
+  print(knitr::kable(ex, col.names = c("Exclusion", "Setting", "Status")))
+}
 ```
 
 ## Per-hole peat profiles by Von Post humification
@@ -257,7 +360,7 @@ ggsave(here(params$output_dir, paste0(params$project_id, "_peat_thickness.png"))
 surf_path <- function(nm)
   here(params$output_dir, paste0(params$project_id, "_thickness_", nm, ".tif"))
 
-plot_surface <- function(nm, title, contour = FALSE) {
+plot_surface <- function(nm, title, contour = FALSE, show_setbacks = FALSE) {
   r <- terra::rast(surf_path(nm))
   r <- terra::mask(r, terra::vect(ownership))           # clip to study area
 
@@ -285,6 +388,18 @@ plot_surface <- function(nm, title, contour = FALSE) {
   terra::plot(terra::vect(ownership), border = "grey20", lwd = 1, add = TRUE)
   terra::plot(terra::vect(approved),  border = "red",    lwd = 2, add = TRUE)
 
+  # Setback/exclusion ZONES (setbacks map set only): the buffered areas actually
+  # removed from harvestable volume, filled semi-transparent and coloured by the
+  # layer they belong to. Drawn BEFORE the contours so the depth contours stay
+  # crisp on top of the zone fills.
+  if (show_setbacks && !is.null(exclusion_zones)) {
+    for (i in seq_len(nrow(exclusion_zones))) {
+      col_i <- zone_cols[[exclusion_zones$key[i]]]
+      terra::plot(terra::vect(exclusion_zones[i, ]),
+                  col = adjustcolor(col_i, 0.40), border = col_i, lwd = 1, add = TRUE)
+    }
+  }
+
   if (contour) {
     # White lines and labels read well across the viridis range (low dark to high
     # bright); only the brightest yellow caps are marginal, and the haloed
@@ -293,25 +408,43 @@ plot_surface <- function(nm, title, contour = FALSE) {
                    lwd = 0.8, labcex = 0.7, drawlabels = TRUE)
   }
 
+  # Waterbody and road overlays, drawn beneath the test-hole markers. These are
+  # the features themselves; the harvestable-volume exclusions buffer them
+  # (45 m waterbodies, 12 m roads) in 03_transform.
+  if (!is.null(water_poly_v))
+    terra::plot(water_poly_v, col = adjustcolor("#4292c6", 0.55),
+                border = "#08519c", lwd = 1, add = TRUE)
+  if (!is.null(water_line_v)) terra::lines(water_line_v, col = "#08519c", lwd = 1.6)
+  if (!is.null(roads_v))      terra::lines(roads_v,      col = "#543005", lwd = 2)
+
   # Test holes, labelled with plot_id so the map ties back to the profile chart.
   terra::plot(pts_v, add = TRUE, col = "black", pch = 21, bg = "white", cex = 1.1)
   terra::text(pts_v, labels = "plot_id", pos = 3, cex = 0.55,
               halo = TRUE, hc = "white", hw = 0.2)
 
-  # Boundary legend (the red / grey outlines on the map). Use terra::add_legend,
+  # Legend (the red / grey outlines plus any overlays). Use terra::add_legend,
   # which targets the map panel — base legend() does not survive terra's
-  # colour-bar layout and renders into the wrong region.
-  terra::add_legend("bottomleft",
-    legend = c("Reno Exploration Lands", "Tactful Developments Ltd. Boundary"),
-    col = c("red", "grey20"), lwd = c(2, 1), lty = 1,
-    bg = "white", box.col = "grey70", cex = 0.7)
+  # colour-bar layout and renders into the wrong region. Built dynamically so it
+  # only lists overlays that were actually supplied.
+  leg <- data.frame(
+    lab = c("Reno Exploration Lands", "Tactful Developments Ltd. Boundary"),
+    col = c("red", "grey20"), lwd = c(2, 1), lty = c(1, 1))
+  if (!is.null(roads_v))
+    leg <- rbind(leg, data.frame(lab = "Roads", col = "#543005", lwd = 2, lty = 1))
+  if (!is.null(water_poly_v) || !is.null(water_line_v))
+    leg <- rbind(leg, data.frame(lab = "Waterbodies", col = "#08519c", lwd = 2, lty = 1))
+  if (show_setbacks && !is.null(exclusion_zones))
+    leg <- rbind(leg, data.frame(lab = exclusion_zones$type,
+                                 col = zone_cols[exclusion_zones$key], lwd = 6, lty = 1))
+  terra::add_legend("bottomleft", legend = leg$lab, col = leg$col,
+    lwd = leg$lwd, lty = leg$lty, bg = "white", box.col = "grey70", cex = 0.7)
 }
 
-save_map <- function(nm, title, suffix = "", contour = FALSE) {
+save_map <- function(nm, title, suffix = "", contour = FALSE, show_setbacks = FALSE) {
   png(here(params$output_dir,
            paste0(params$project_id, "_map_", nm, suffix, ".png")),
       width = 1800, height = 1500, res = 200)
-  plot_surface(nm, title, contour = contour)
+  plot_surface(nm, title, contour = contour, show_setbacks = show_setbacks)
   dev.off()
 }
 
@@ -325,9 +458,20 @@ save_map("professional", "Professional peat thickness (m)",
 save_map("retail",       "Retail peat thickness (m)",
          suffix = "_contour", contour = TRUE)
 
+# Third set: setback / exclusion zones overlaid, coloured by layer, WITH peat
+# depth contours, for direct comparison against the plain maps above.
+save_map("professional", "Professional peat thickness with setbacks (m)",
+         suffix = "_setbacks", show_setbacks = TRUE, contour = TRUE)
+save_map("retail",       "Retail peat thickness with setbacks (m)",
+         suffix = "_setbacks", show_setbacks = TRUE, contour = TRUE)
+
 # Show inline as well
 plot_surface("professional", "Professional peat thickness (m)")
 plot_surface("retail",       "Retail peat thickness (m)")
+plot_surface("professional", "Professional peat thickness with setbacks (m)",
+             show_setbacks = TRUE, contour = TRUE)
+plot_surface("retail",       "Retail peat thickness with setbacks (m)",
+             show_setbacks = TRUE, contour = TRUE)
 plot_surface("professional", "Professional peat thickness (m)", contour = TRUE)
 plot_surface("retail",       "Retail peat thickness (m)", contour = TRUE)
 ```
