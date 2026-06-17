@@ -84,6 +84,54 @@ zone_cols <- c(boundary = "#7570b3", waterbody = "#08519c",
                road = "#543005", utility = "#e6550d")
 ```
 
+## Per-hole field summary
+
+```{r tbl-field-summary}
+# One row per test hole, surfacing the per-hole field measurements the client
+# (Sun Gro) asked for: AWCS wetland class, dominant surface bryophyte, depth to
+# water table, depth to mineral contact (peat depth), pH and EC — plus the
+# harvestable thickness split by product grade (professional H1-H4, retail
+# H5-H6, each net of the 0.5 m basal reclamation allowance). All columns already
+# live in hole_summary (intervals + the joined plots sheet); this just presents
+# them. NA-safe: frost/disturbance can leave individual fields unrecorded, and
+# Upland anchor holes carry 0 peat depth.
+num <- function(x, d) ifelse(is.na(x), "—",
+  formatC(round(as.numeric(x), d), format = "f", digits = d, big.mark = ","))
+chr <- function(x) ifelse(is.na(x) | !nzchar(as.character(x)), "—", as.character(x))
+
+field_tbl <- hole_summary |>
+  arrange(plot_id) |>
+  transmute(
+    `Test Hole`              = plot_id,
+    `Wetland Class (AWCS)`   = chr(awcs_wetland_class),
+    `Dominant Bryophyte`     = chr(dominant_bryophyte),
+    `Peat Depth (m)`         = num(mineral_depth_cm / 100, 2),
+    `Water Table (m)`        = num(water_table_depth_m, 2),
+    `pH`                     = num(ph, 1),
+    `EC (µS/cm)`             = num(conductivity_us_cm, 0),
+    `Professional H1-H4 (m)` = num(prof_harv_m, 2),
+    `Retail H5-H6 (m)`       = num(retail_harv_m, 2)
+  )
+
+# Save a report-ready CSV alongside the other pipeline outputs.
+write.csv(field_tbl,
+          here("data-raw", paste0(params$project_id, "_peat_field_summary.csv")),
+          row.names = FALSE, fileEncoding = "UTF-8")
+
+knitr::kable(
+  field_tbl,
+  align   = c("l", "l", "l", "r", "r", "r", "r", "r", "r"),
+  caption = paste0(
+    "Per-hole field summary — ", params$project_id,
+    ". One row per test hole: AWCS wetland classification, dominant surface ",
+    "bryophyte, depth to mineral contact (peat depth), depth to water table, pH, ",
+    "and electrical conductivity, with harvestable thickness by product grade ",
+    "(professional H1–H4, retail H5–H6) net of the 0.5 m basal reclamation ",
+    "allowance. “—” = not recorded in the field (e.g. frozen ground) or ",
+    "not applicable (Upland anchor holes carry 0 m peat). Harvestable thicknesses ",
+    "are the per-hole values interpolated for the volume estimates."))
+```
+
 ## Volume summary table
 
 ```{r tbl-volumes}

@@ -147,7 +147,9 @@ knitr::kable(headline, row.names = FALSE,
 ```
 
 ```{r note-headline, results='asis'}
-cat(sprintf("
+# Built into a variable so it can be saved with the table and reused verbatim by
+# the report (report_template.qmd), keeping the note traceable to this run's params.
+note_headline <- sprintf("
 *Notes on the table above:*
 
 - The **90%% interval** is a bootstrap range: the test holes were resampled %d times, re-interpolated and re-integrated, and the central %d%% of results reported. It expresses **sampling uncertainty** from the limited number of holes — not measurement or Von Post error — and is a statistical range (distinct from the parameter-sensitivity span in the appendix, which is a deterministic scenario; the two are not combined).
@@ -155,7 +157,8 @@ cat(sprintf("
 - **Waterbody setback area:** a %d m buffer around every waterbody — polygons (lakes/ponds) and polylines (creeks/streams) — applied everywhere including the approved lands.
 ",
   as.integer(params$n_boot), as.integer(params$boot_ci * 100),
-  as.integer(params$waterbody_setback_m), as.integer(params$waterbody_setback_m)))
+  as.integer(params$waterbody_setback_m), as.integer(params$waterbody_setback_m))
+cat(note_headline)
 ```
 
 ```{r fig-bootstrap, fig.height=4}
@@ -221,7 +224,14 @@ knitr::kable(sens, row.names = FALSE,
 ```
 
 ```{r save}
+# headline + note are the report-ready net-harvestable table and its caption note;
+# saved here so report_template.qmd consumes them directly instead of re-deriving
+# the bootstrap-interval formatting.
 saveRDS(list(bootstrap = boot, loocv = loocv, sensitivity = sens,
-             n_boot = params$n_boot, boot_ci = params$boot_ci),
+             n_boot = params$n_boot, boot_ci = params$boot_ci,
+             headline = headline, note = note_headline),
         here("data-raw", paste0(params$project_id, "_peat_uncertainty.rds")))
+write.csv(headline,
+          here("data-raw", paste0(params$project_id, "_peat_harvestable_report.csv")),
+          row.names = FALSE)
 ```
