@@ -22,6 +22,7 @@ params:
   client:       "Client Name"
   prepared_by:  "Green Plan Ltd."
   figure_dir:   "reports/figures"
+  map_style:    "contour"   # thickness-map style: "contour" or "plain"
 ---
 
 ```{r}
@@ -39,6 +40,11 @@ has_peat       <- file.exists(peat_field_csv) && file.exists(peat_unc_rds)
 figp <- function(name, ext = ".png") {
   here(params$figure_dir, paste0(params$project_id, "_", name, ext))
 }
+
+# Thickness-map style selector: "contour" uses the *_contour.png maps, "plain"
+# uses the unsuffixed ones. Lets the report show one map per grade without
+# editing chunks — flip params$map_style.
+map_suffix <- if (identical(params$map_style, "plain")) "" else "_contour"
 ```
 
 ```{r}
@@ -136,30 +142,16 @@ knitr::kable(read.csv(peat_field_csv, check.names = FALSE, fileEncoding = "UTF-8
 
 ## Peat Thickness and Stratigraphy
 
-Total peat thickness across the deposit is mapped in @fig-peat-thickness. The
-interpreted stratigraphy along the survey transect is shown in cross-section
-(@fig-peat-xsection) and as per-hole profiles before and after the reclamation
-allowance is removed (@fig-peat-profiles, @fig-peat-profiles-recl).
+Total peat thickness across the deposit is mapped in @fig-peat-thickness, and
+per-hole stratigraphy — with the 0.5 m basal reclamation allowance marked — in
+@fig-peat-profiles-recl. Interpreted cross-sections along selected test-hole
+transects are provided in Appendix A.
 
 ```{r}
 #| label: fig-peat-thickness
 #| fig-cap: "Total peat thickness across the assessment area."
 #| eval: !expr has_peat
 knitr::include_graphics(figp("peat_thickness"))
-```
-
-```{r}
-#| label: fig-peat-xsection
-#| fig-cap: "Interpreted peat cross-section along the survey transect, showing Von Post grade bands, the reclamation line, and water table."
-#| eval: !expr has_peat
-knitr::include_graphics(figp("peat_cross_section"))
-```
-
-```{r}
-#| label: fig-peat-profiles
-#| fig-cap: "Per-hole peat profiles by Von Post product grade."
-#| eval: !expr has_peat
-knitr::include_graphics(figp("peat_profiles"))
 ```
 
 ```{r}
@@ -174,8 +166,7 @@ knitr::include_graphics(figp("peat_profiles_reclamation"))
 Net harvestable volumes by grade, with a 90% bootstrap interval on the
 harvestable rows, are given in @tbl-peat-harvestable. The professional- and
 retail-grade thickness surfaces are mapped in @fig-peat-professional and
-@fig-peat-retail, with contoured versions in @fig-peat-professional-contour and
-@fig-peat-retail-contour.
+@fig-peat-retail.
 
 ```{r}
 #| label: tbl-peat-harvestable
@@ -195,28 +186,14 @@ cat(readRDS(peat_unc_rds)$note)
 #| label: fig-peat-professional
 #| fig-cap: "Professional-grade (H1–H4) harvestable peat thickness."
 #| eval: !expr has_peat
-knitr::include_graphics(figp("map_professional"))
-```
-
-```{r}
-#| label: fig-peat-professional-contour
-#| fig-cap: "Professional-grade harvestable peat thickness, contoured."
-#| eval: !expr has_peat
-knitr::include_graphics(figp("map_professional_contour"))
+knitr::include_graphics(figp(paste0("map_professional", map_suffix)))
 ```
 
 ```{r}
 #| label: fig-peat-retail
 #| fig-cap: "Retail-grade (H5–H6) harvestable peat thickness."
 #| eval: !expr has_peat
-knitr::include_graphics(figp("map_retail"))
-```
-
-```{r}
-#| label: fig-peat-retail-contour
-#| fig-cap: "Retail-grade harvestable peat thickness, contoured."
-#| eval: !expr has_peat
-knitr::include_graphics(figp("map_retail_contour"))
+knitr::include_graphics(figp(paste0("map_retail", map_suffix)))
 ```
 
 ## Setback-Constrained Volumes
@@ -264,7 +241,8 @@ drawn as its real logged grade column at its true along-transect distance; the
 mineral base, 0.5 m reclamation line, and water table are connected between
 holes. The ground between holes is left blank — this is honest logged
 stratigraphy, not depth-resolved interpolation. The overview map (@fig-xsec-overview)
-locates every section; section transects are listed in the figure subtitles.
+locates every section; each section's test holes are labelled on the cores and in
+its location inset.
 
 Sections are lettered by location (north→south, then west→east) so they progress
 sensibly across the location map, and the holes within each section are ordered
