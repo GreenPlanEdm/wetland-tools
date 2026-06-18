@@ -1,0 +1,174 @@
+---
+title: "Wetland Assessment & Impact Report (WAIR)"
+subtitle: "`r params$project_name`"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+format:
+  docx:
+    reference-doc: report_style.docx
+    toc: true
+    toc-depth: 3
+    number-sections: true
+  html:
+    toc: true
+    toc-location: left
+    number-sections: true
+execute:
+  echo: false
+  warning: false
+  message: false
+params:
+  project_id:   "PROJECT_ID"
+  project_name: "Project Name"
+  client:       "Client Name"
+  prepared_by:  "Green Plan Ltd."
+  figure_dir:   "reports/figures"
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(dplyr)
+library(knitr)
+library(here)
+
+# Show a figure if it has been generated, otherwise emit a pending placeholder
+# so the template renders before the vegetation/soils/water pipelines have run.
+show_fig <- function(file, what) {
+  p <- here(params$figure_dir, file)
+  if (file.exists(p)) {
+    knitr::include_graphics(p)
+  } else {
+    knitr::asis_output(paste0("*[Figure pending: ", what, "]*"))
+  }
+}
+```
+
+# Executive Summary
+
+*[Summarise the wetlands identified, their AWCS classification, the WAIR
+significance scores, the proposed development, and the assessed impacts and
+recommended mitigation.]*
+
+# Introduction
+
+## Project Background
+
+*[Insert project background and the purpose of the assessment.]*
+
+## Proposed Development
+
+*[Describe the proposed development, its footprint, and its spatial relationship
+to the wetlands assessed.]*
+
+## Regulatory Framework
+
+This assessment is conducted under the **Alberta Wetland Policy** and aligns with:
+
+- **Alberta Wetland Classification System (AWCS)** — wetland class/form/type
+- **Alberta Wetland Identification and Delineation Directive (AWIDD)** — delineation
+- **Wetland Assessment and Impact Rating (WAIR)** — significance scoring
+- **Guidance to Determining Water Permanence** — permanence assessment
+
+# Methods
+
+## Wetland Delineation
+
+Wetland boundaries were delineated following AWIDD, using plot-based vegetation,
+soils, and hydrology indicators at paired wetland/upland plots.
+
+## Vegetation Assessment
+
+Vascular plant cover was recorded by plot and each species assigned a wetland
+indicator status (UPL, FACU, FAC, FACW, OBL). Plot-level UPL–OBL summaries and
+ANPC wetland plant community affinities were derived for delineation and scoring.
+
+## Soils Assessment
+
+Soil profiles were described and classified following the Canadian System of Soil
+Classification (CSSC). Hydric soil indicators (low chroma matrices, redoximorphic
+features) were identified from Munsell notation; peat was characterised on the
+Von Post humification scale.
+
+## Water Permanence
+
+Water permanence was assessed from multi-date satellite imagery using NDWI pixel
+classification, supplemented by LiDAR-derived depression analysis, and assigned
+to the Alberta permanence typology.
+
+# Wetland Inventory and Classification
+
+*[Insert the inventory of delineated wetlands with AWCS class, form, and type, and
+a location figure.]*
+
+```{r}
+#| label: fig-wetland-inventory
+#| fig-cap: "Delineated wetlands and assessment plots."
+show_fig("fig_wetland_inventory.png", "wetland inventory map")
+```
+
+# Assessment Results
+
+## Vegetation
+
+Wetland indicator cover by plot is shown in @fig-upl-obl, native versus invasive
+cover in @fig-invasive, and noxious weed occurrence in @fig-noxious.
+
+```{r}
+#| label: fig-upl-obl
+#| fig-cap: "Wetland indicator cover by plot."
+show_fig("fig_upl_obl_by_plot.png", "wetland indicator cover by plot")
+```
+
+```{r}
+#| label: fig-invasive
+#| fig-cap: "Native vs invasive cover by plot."
+show_fig("fig_native_invasive_by_plot.png", "native vs invasive cover by plot")
+```
+
+```{r}
+#| label: fig-noxious
+#| fig-cap: "Noxious weed species heat map."
+show_fig("fig_noxious_heatmap.png", "noxious weed heat map")
+```
+
+## Soils
+
+Peat profiles classified by Von Post humification are presented in @fig-soils-vonpost.
+
+```{r}
+#| label: fig-soils-vonpost
+#| fig-cap: "Peat profiles by Von Post humification."
+show_fig("fig_peat_vonpost.png", "Von Post peat profiles")
+```
+
+## Water Permanence
+
+*[Insert water permanence figures and interpretation.]*
+
+# WAIR Scoring
+
+The WAIR significance score combines vegetation, soils, water permanence, and
+landscape-context inputs into a composite rating used in the impact assessment.
+
+*[Insert the WAIR scoring table and the derived significance class per wetland.]*
+
+# Impact Assessment
+
+## Direct and Indirect Impacts
+
+*[Assess direct (footprint) and indirect (hydrological, edge) impacts of the
+proposed development on each wetland, referenced to its WAIR significance.]*
+
+## Mitigation and Compensation
+
+*[Describe avoidance, minimisation, and compensation measures consistent with the
+Alberta Wetland Policy mitigation hierarchy.]*
+
+# Conclusions and Recommendations
+
+*[State the assessed significance, residual impacts after mitigation, and
+recommendations.]*
+
+---
+
+*Report prepared by `r params$prepared_by` for `r params$client`.*
