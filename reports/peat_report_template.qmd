@@ -339,23 +339,28 @@ parameter. Photos are numbered separately from the report figures.
 ```{r}
 #| label: setup-photos
 #| include: false
-photo_csv  <- if (nzchar(params$photo_manifest)) here(params$photo_manifest) else ""
-has_photos <- nzchar(photo_csv) && file.exists(photo_csv)
+photo_csv <- if (nzchar(params$photo_manifest)) here(params$photo_manifest) else ""
+photos    <- if (nzchar(photo_csv) && file.exists(photo_csv)) {
+  read.csv(photo_csv, stringsAsFactors = FALSE, fileEncoding = "UTF-8")
+} else {
+  data.frame(file = character(), caption = character())
+}
+has_photos <- nrow(photos) > 0
 ```
 
 ```{r}
 #| label: photos-placeholder
 #| output: asis
 #| eval: !expr "!has_photos"
-cat("*[No photo log manifest supplied. Set the `photo_manifest` parameter to a CSV",
-    "with `file` and `caption` columns to populate this appendix.]*")
+cat("*[No photographs logged yet. Add photo files and rows to the project's",
+    "`photos/photo_manifest.csv` (columns `file`, `caption`) to populate this",
+    "appendix.]*")
 ```
 
 ```{r}
 #| label: photo-log
 #| output: asis
 #| eval: !expr has_photos
-photos   <- read.csv(photo_csv, stringsAsFactors = FALSE, fileEncoding = "UTF-8")
 base_dir <- dirname(photo_csv)
 for (i in seq_len(nrow(photos))) {
   img <- photos$file[i]
