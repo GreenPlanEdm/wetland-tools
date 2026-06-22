@@ -31,16 +31,10 @@ library(dplyr)
 library(knitr)
 library(here)
 
-# Show a figure if it has been generated, otherwise emit a pending placeholder
-# so the template renders before the vegetation/soils/water pipelines have run.
-show_fig <- function(file, what) {
-  p <- here(params$figure_dir, file)
-  if (file.exists(p)) {
-    knitr::include_graphics(p)
-  } else {
-    knitr::asis_output(paste0("*[Figure pending: ", what, "]*"))
-  }
-}
+# show_fig() — figure-if-exists-else-placeholder — shared with the monitoring
+# template. figure_dir must be set before sourcing the helper.
+figure_dir <- params$figure_dir
+source(here("reports/_report_helpers.R"))
 ```
 
 # Executive Summary

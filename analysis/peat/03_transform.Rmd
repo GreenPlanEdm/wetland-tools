@@ -74,10 +74,14 @@ line (harvestable) and the part **within** the buffer.
 ```{r reclamation}
 recl <- params$reclaim_depth_cm
 
+# NA-safe max: NA (not -Inf) when a hole has no usable bottom depth, so a
+# degenerate hole propagates NA rather than a poisonous -Inf into the geometry.
+safe_max <- function(x) { x <- x[!is.na(x)]; if (length(x)) max(x) else NA_real_ }
+
 intervals <- intervals |>
   group_by(plot_id) |>
   mutate(
-    mineral_depth_cm = max(depth_bot_cm, na.rm = TRUE),
+    mineral_depth_cm = safe_max(depth_bot_cm),
     recl_line_cm     = mineral_depth_cm - recl,                 # boundary depth
     # portion of this interval shallower than the reclamation line:
     harvest_cm = pmax(0, pmin(depth_bot_cm, recl_line_cm) - depth_top_cm),

@@ -39,6 +39,12 @@ peat_field_csv <- here("data-raw", paste0(params$project_id, "_peat_field_summar
 peat_unc_rds   <- here("data-raw", paste0(params$project_id, "_peat_uncertainty.rds"))
 has_peat       <- file.exists(peat_field_csv) && file.exists(peat_unc_rds)
 
+# Read the pipeline outputs once here; every table/figure below references these
+# objects so the headline volumes are guaranteed identical across the report.
+peat_unc   <- if (has_peat) readRDS(peat_unc_rds) else NULL
+peat_field <- if (has_peat) read.csv(peat_field_csv, check.names = FALSE,
+                                     fileEncoding = "UTF-8") else NULL
+
 # Project-prefixed figure path produced by analysis/peat/04_visualize.Rmd
 figp <- function(name, ext = ".png") {
   here(params$figure_dir, paste0(params$project_id, "_", name, ext))
@@ -70,7 +76,7 @@ infrastructure exclusions are applied.]*
 #| label: tbl-exec-summary
 #| tbl-cap: "Headline net harvestable peat volumes by product grade."
 #| eval: !expr has_peat
-knitr::kable(readRDS(peat_unc_rds)$headline, row.names = FALSE)
+knitr::kable(peat_unc$headline, row.names = FALSE)
 ```
 
 # Introduction
@@ -166,14 +172,14 @@ retail-grade thickness surfaces are mapped in @fig-peat-professional and
 #| label: tbl-peat-harvestable
 #| tbl-cap: "Net harvestable peat by product grade, with a 90% bootstrap interval (sampling uncertainty) on the harvestable rows."
 #| eval: !expr has_peat
-knitr::kable(readRDS(peat_unc_rds)$headline, row.names = FALSE)
+knitr::kable(peat_unc$headline, row.names = FALSE)
 ```
 
 ```{r}
 #| label: note-peat-harvestable
 #| output: asis
 #| eval: !expr has_peat
-cat(readRDS(peat_unc_rds)$note)
+cat(peat_unc$note)
 ```
 
 ```{r}
@@ -280,7 +286,7 @@ table, pH, electrical conductivity, and harvestable thickness by product grade
 #| label: tbl-peat-field
 #| tbl-cap: "Per-hole field summary. Harvestable thicknesses are net of the 0.5 m basal reclamation allowance; \"—\" = not recorded (e.g. frozen ground) or not applicable (Upland anchor)."
 #| eval: !expr has_peat
-knitr::kable(read.csv(peat_field_csv, check.names = FALSE, fileEncoding = "UTF-8"))
+knitr::kable(peat_field)
 ```
 
 # Appendix C — Photo Log {.unnumbered}

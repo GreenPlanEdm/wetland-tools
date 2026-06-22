@@ -8,6 +8,12 @@
 # Project-specific values (paths, setback overrides) live in a thin caller under
 # data-raw/projects/<PROJECT_ID>/run_peat.R, which sources this file and calls
 # run_peat_pipeline() with a `config` list. See WORKFLOW.md.
+#
+# SCOPE: this runs the generic analysis (steps 01-05) only. The cross-section
+# appendix figures need project-specific transect definitions, so they — and the
+# final report render — are produced by the project's run_report.R, which is the
+# intended end-to-end entry point (it calls this pipeline, cross_sections.R, and
+# the report). Running this pipeline alone leaves Appendix A unpopulated.
 
 library(rmarkdown)
 library(here)

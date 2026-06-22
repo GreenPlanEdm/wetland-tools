@@ -108,17 +108,29 @@ flag_plotlevel |> select(plot_id, awcs_wetland_class, utm_zone, ph, flag)
 ## Flag: water table deeper than the peat profile
 
 ```{r flag-watertable}
+# NA-safe max: returns NA (not -Inf) when a hole has no usable bottom depth, so
+# the comparison below can't be poisoned into a spurious flag.
+safe_max <- function(x) { x <- x[!is.na(x)]; if (length(x)) max(x) else NA_real_ }
+
 peat_depth <- horizons |>
   group_by(plot_id) |>
-  summarise(mineral_depth_cm = max(depth_bot_cm, na.rm = TRUE), .groups = "drop")
+  summarise(mineral_depth_cm = safe_max(depth_bot_cm), .groups = "drop")
+
+# Holes with logged horizons but no usable bottom depth -> peat depth can't be
+# determined; surface for review rather than letting it pass as a silent NA.
+flag_no_depth <- peat_depth |>
+  filter(is.na(mineral_depth_cm)) |>
+  mutate(flag = "NO_PEAT_DEPTH_RECORDED")
 
 flag_wt <- plots |>
   left_join(peat_depth, by = "plot_id") |>
-  filter(!is.na(water_table_depth_m),
+  filter(!is.na(water_table_depth_m), !is.na(mineral_depth_cm),
          water_table_depth_m * 100 > mineral_depth_cm) |>
   mutate(flag = "WATER_TABLE_BELOW_MINERAL")
 
-flag_wt |> select(plot_id, water_table_depth_m, mineral_depth_cm, flag)
+bind_rows(flag_wt   |> select(plot_id, water_table_depth_m, mineral_depth_cm, flag),
+          flag_no_depth |> mutate(water_table_depth_m = NA_real_) |>
+            select(plot_id, water_table_depth_m, mineral_depth_cm, flag))
 ```
 
 ## Flag: referential integrity between sheets
@@ -150,7 +162,8 @@ bind_rows(
 horizon_flags <- bind_rows(flag_inverted, flag_gap, flag_vp_missing,
                            flag_vp_invalid, flag_orphan_horizon) |>
   select(plot_id, depth_top_cm, depth_bot_cm, von_post, flag)
-plot_flags    <- bind_rows(flag_plotlevel, flag_wt, flag_plot_no_horizon) |>
+plot_flags    <- bind_rows(flag_plotlevel, flag_wt, flag_plot_no_horizon,
+                           flag_no_depth) |>
   select(plot_id, flag)
 
 all_flags <- bind_rows(horizon_flags, plot_flags)
