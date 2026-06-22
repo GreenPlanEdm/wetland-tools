@@ -6,6 +6,7 @@ params:
   project_id: "PROJECT_ID"
   ownership_boundary: "data-raw/projects/ownership_boundary.shp"
   waterbody_setback_m: 45  # for the table note — must match 03_transform
+  utility_buffer_m: 30     # for the table note — must match 03_transform
   n_boot: 1000             # bootstrap resamples (0 to skip); ~2 min at 1000 on a 25-hole grid
   boot_ci: 0.90            # central interval width for the bootstrap range
   power_range: !r c(1, 2, 3)  # IDW power values for the parameter-sensitivity span
@@ -150,31 +151,65 @@ knitr::kable(headline, row.names = FALSE,
 # Built into a variable so it can be saved with the table and reused verbatim by
 # the report (report_template.qmd), keeping the note traceable to this run's params.
 note_headline <- sprintf("
-*Notes on the table above:*
+*Notes on the table above:* The two harvestable rows plus the two deduction rows
+(*Excluded — waterbody setback* and *Excluded — other*) sum to the commercial
+in-place resource.
 
 - The **90%% interval** is a bootstrap range: the test holes were resampled %d times, re-interpolated and re-integrated, and the central %d%% of results reported. It expresses **sampling uncertainty** from the limited number of holes — not measurement or Von Post error — and is a statistical range (distinct from the parameter-sensitivity span in the appendix, which is a deterministic scenario; the two are not combined).
-- **Excluded — waterbody setback** is the harvestable peat within the %d m waterbody setback that would return if that setback were reduced/removed (its marginal contribution); **Excluded — other** is the boundary setback, roads, and utilities. The two harvestable rows plus the two excluded rows sum to the commercial in-place resource.
-- **Waterbody setback area:** a %d m buffer around every waterbody — polygons (lakes/ponds) and polylines (creeks/streams) — applied everywhere including the approved lands.
+- **Excluded — waterbody setback.** The harvestable peat that falls within the %d m waterbody setback — its marginal contribution, i.e. the volume that would return to the resource if that setback were reduced or removed. The setback is a %d m buffer applied around every waterbody, both polygons (lakes and ponds) and polylines (creeks and streams), across the entire study area **including the previously approved lands** — applied conservatively because any existing *Water Act* approval over the approved lands may have lapsed and would require updating under current conditions.
+- **Excluded — other.** Harvestable peat removed for non-waterbody constraints — generally either the **%d m setback around low-pressure pipelines and underground utilities**, or the peat **beneath existing roads**, which is present but not harvestable because the road is constructed as fill/corduroy over intact peat. Where the expansion area applies, this row also includes the required property-boundary harvest setback.
 ",
   as.integer(params$n_boot), as.integer(params$boot_ci * 100),
-  as.integer(params$waterbody_setback_m), as.integer(params$waterbody_setback_m))
+  as.integer(params$waterbody_setback_m), as.integer(params$waterbody_setback_m),
+  as.integer(params$utility_buffer_m))
 cat(note_headline)
 ```
 
-```{r fig-bootstrap, fig.height=4}
+```{r fig-bootstrap, fig.height=5}
 if (!is.null(boot)) {
-  dd <- as.data.frame(draws); names(dd) <- sapply(combos, function(c) paste(c["area"], c["band"]))
-  long <- tidyr::pivot_longer(dd, everything(), names_to = "series", values_to = "volume_m3")
+  # Full, human-readable panel titles (e.g. "Approved Professional Peat").
+  area_label <- c(approved = "Approved", ownership = "Ownership")
+  band_label <- c(prof = "Professional", retail = "Retail")
+  series_full <- function(area, band)
+    paste(area_label[area], band_label[band], "Peat")
+
+  dd <- as.data.frame(draws)
+  names(dd) <- vapply(combos, function(c) series_full(c["area"], c["band"]), "")
+  long <- tidyr::pivot_longer(dd, everything(),
+                              names_to = "series", values_to = "volume_m3")
+
+  # Per-panel markers: the reported point estimate (red line — the value in the
+  # net-harvestable table) and the 90% bootstrap interval (shaded band + dashed
+  # lines), so the distribution is read against the numbers in the table.
+  base_product <- setNames(names(band_key), band_key)   # "prof" -> "Professional peat — harvestable"
+  markers <- do.call(rbind, lapply(combos, function(c) {
+    a <- c["area"]; b <- c["band"]
+    est <- base_vol[[paste0(a, "_m3")]][base_vol$product == base_product[b]]
+    r   <- boot[boot$band == b & boot$area == a, ]
+    data.frame(series = series_full(a, b), est = est, p_lo = r$p_lo, p_hi = r$p_hi)
+  }))
+
   g <- ggplot(long, aes(volume_m3)) +
+    geom_rect(data = markers, inherit.aes = FALSE,
+              aes(xmin = p_lo, xmax = p_hi, ymin = -Inf, ymax = Inf),
+              fill = "red", alpha = 0.08) +
     geom_histogram(bins = 40, fill = "#2c7fb8", colour = "white") +
+    geom_vline(data = markers, aes(xintercept = p_lo),
+               colour = "red", linetype = "dashed", linewidth = 0.4) +
+    geom_vline(data = markers, aes(xintercept = p_hi),
+               colour = "red", linetype = "dashed", linewidth = 0.4) +
+    geom_vline(data = markers, aes(xintercept = est),
+               colour = "red", linewidth = 0.8) +
     facet_wrap(~series, scales = "free", ncol = 2) +
     scale_x_continuous(labels = scales::label_comma()) +
     labs(title = "Bootstrap distribution of harvestable volume",
+         subtitle = paste0("Solid red line = reported estimate; shaded band and dashed lines = ",
+                           round(params$boot_ci * 100), "% bootstrap interval (both from Table 2)."),
          x = "Volume (m³)", y = "Resamples") +
     theme_bw()
   print(g)
   ggsave(here(params$output_dir, paste0(params$project_id, "_peat_bootstrap.png")),
-         g, width = 9, height = 5, dpi = 300)
+         g, width = 9, height = 5.5, dpi = 300)
 }
 ```
 
