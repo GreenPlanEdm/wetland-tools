@@ -29,6 +29,8 @@ library(here)
 # Shared grade palette / legend labels / classify_grade() — single source of
 # truth, also used by analysis/peat/cross_sections.R (appendix fence diagrams).
 source(here("analysis/peat/grade_palette.R"))
+# zone_epsg() / project_holes(): zone-safe hole points in one common CRS.
+source(here("analysis/peat/spatial_helpers.R"))
 dir.create(here(params$output_dir), showWarnings = FALSE, recursive = TRUE)
 ```
 
@@ -44,16 +46,9 @@ approved  <- st_transform(st_read(here(params$approved_boundary), quiet = TRUE),
                           st_crs(ownership))
 
 # Test-hole points in the analysis (ownership) CRS, for overlaying on the maps.
-# Split by UTM zone so each gets the right CRS, then reproject to the map CRS.
-make_points <- function(df, zone, epsg) {
-  sub <- dplyr::filter(df, utm_zone == zone)
-  if (nrow(sub) == 0) return(NULL)
-  st_as_sf(sub, coords = c("gps_easting", "gps_northing"), crs = epsg, remove = FALSE)
-}
-pts <- dplyr::bind_rows(
-  { p <- make_points(hole_summary, "11N", 26911); if (!is.null(p)) st_transform(p, st_crs(ownership)) },
-  { p <- make_points(hole_summary, "12N", 26912); if (!is.null(p)) st_transform(p, st_crs(ownership)) }
-)
+# Each hole is built in its recorded UTM zone, then reprojected; proj_x/proj_y
+# give zone-safe coordinates. Zone read per hole from utm_zone.
+pts <- project_holes(hole_summary, st_crs(ownership))
 pts_v <- terra::vect(pts)
 
 # Optional overlay layers for the maps (roads, waterbodies). Each param accepts
@@ -261,17 +256,18 @@ make_section <- length(sec_ids) > 0
 ```
 
 ```{r fig-cross-section-build, fig.height=5, eval=make_section}
-# Chosen holes in transect order, with coordinates, depth and water table.
-sec_xy <- hole_summary |>
-  distinct(plot_id, gps_easting, gps_northing, mineral_depth_cm, water_table_depth_m)
+# Chosen holes in transect order, with coordinates, depth and water table. Use
+# the common-CRS coordinates (proj_x/proj_y) so distances are zone-safe.
+sec_xy <- sf::st_drop_geometry(pts) |>
+  distinct(plot_id, proj_x, proj_y, mineral_depth_cm, water_table_depth_m)
 sec_xy <- sec_xy[match(sec_ids, sec_xy$plot_id), ]
-if (anyNA(sec_xy$gps_easting))
+if (anyNA(sec_xy$proj_x))
   stop("section_holes not found in data: ",
-       paste(sec_ids[is.na(sec_xy$gps_easting)], collapse = ", "))
+       paste(sec_ids[is.na(sec_xy$proj_x)], collapse = ", "))
 
 # Cumulative straight-line distance along the polyline through the holes (m).
-sec_xy$dist_m <- cumsum(c(0, sqrt(diff(sec_xy$gps_easting)^2 +
-                                  diff(sec_xy$gps_northing)^2)))
+sec_xy$dist_m <- cumsum(c(0, sqrt(diff(sec_xy$proj_x)^2 +
+                                  diff(sec_xy$proj_y)^2)))
 sec_xy <- left_join(sec_xy, distinct(intervals, plot_id, recl_line_cm), by = "plot_id")
 sec_xy$wt_cm <- sec_xy$water_table_depth_m * 100   # water-table depth (cm)
 
@@ -313,7 +309,7 @@ p_section <- ggplot() +
 
 # Inset location map: study area, all holes, and the transect highlighted.
 transect_line <- sf::st_sfc(
-  sf::st_linestring(as.matrix(sec_xy[, c("gps_easting", "gps_northing")])),
+  sf::st_linestring(as.matrix(sec_xy[, c("proj_x", "proj_y")])),
   crs = sf::st_crs(ownership))
 sec_pts <- pts |> filter(plot_id %in% sec_ids)
 

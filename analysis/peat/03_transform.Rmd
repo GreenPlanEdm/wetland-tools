@@ -148,24 +148,15 @@ cat(nrow(upland_anchors), "upland 0-thickness anchor(s) added:",
 ## Build spatial points (handles both UTM zones)
 
 ```{r points}
-# Split by UTM zone so each gets the correct CRS, then reproject to a common one.
-make_points <- function(df, zone, epsg) {
-  sub <- df |> filter(utm_zone == zone)
-  if (nrow(sub) == 0) return(NULL)
-  st_as_sf(sub, coords = c("gps_easting", "gps_northing"), crs = epsg, remove = FALSE)
-}
-pts_11 <- make_points(hole_summary, "11N", 26911)   # NAD83 / UTM zone 11N
-pts_12 <- make_points(hole_summary, "12N", 26912)   # NAD83 / UTM zone 12N
-
 # Reproject everything to the CRS of the ownership boundary (the analysis CRS).
+source(here("analysis/peat/spatial_helpers.R"))
 ownership <- st_read(here(params$ownership_boundary), quiet = TRUE)
 approved  <- st_read(here(params$approved_boundary),  quiet = TRUE)
 target_crs <- st_crs(ownership)
 
-pts <- bind_rows(
-  if (!is.null(pts_11)) st_transform(pts_11, target_crs),
-  if (!is.null(pts_12)) st_transform(pts_12, target_crs)
-)
+# Build hole points, each in its recorded UTM zone, reprojected to the analysis
+# CRS. Zone comes from the form's utm_zone column; see spatial_helpers.R.
+pts <- project_holes(hole_summary, target_crs)
 approved <- st_transform(approved, target_crs)
 
 pts_v       <- terra::vect(pts)
