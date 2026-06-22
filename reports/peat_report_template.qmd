@@ -136,14 +136,14 @@ robustness of the volume estimates.
 
 ## Peat Thickness and Stratigraphy
 
-Total peat thickness across the deposit is mapped in @fig-peat-thickness, and
-per-hole stratigraphy — with the 0.5 m basal reclamation allowance marked — in
-@fig-peat-profiles-recl. Interpreted cross-sections along selected test-hole
-transects are provided in Appendix A.
+Harvestable peat thickness at each test hole, split by product grade, is shown
+in @fig-peat-thickness, and per-hole stratigraphy — with the 0.5 m basal
+reclamation allowance marked — in @fig-peat-profiles-recl. Interpreted
+cross-sections along selected test-hole transects are provided in Appendix A.
 
 ```{r}
 #| label: fig-peat-thickness
-#| fig-cap: "Total peat thickness across the assessment area."
+#| fig-cap: "Harvestable peat thickness by test hole, split by product grade (net of the 0.5 m basal reclamation allowance)."
 #| eval: !expr has_peat
 knitr::include_graphics(figp("peat_thickness"))
 ```

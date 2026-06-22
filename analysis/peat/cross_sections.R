@@ -19,26 +19,9 @@ library(ggplot2)
 library(sf)
 library(here)
 
-# Shared grade palette / classification — kept identical to 04_visualize.Rmd so
-# the appendix sections read the same as the main cross-section figure.
-.forest_floor_pat <- "^(LFH|LF|FH|L|F|H)$"
-.grade_levels <- c("professional", "retail", "non_saleable", "forest_floor", "mineral")
-.band_cols <- c(professional = "#1a9850", retail = "#fee08b",
-                non_saleable = "#8c510a", forest_floor = "#c8a165",
-                mineral = "#9e9e9e")
-.grade_labels <- c(professional = "Professional (H1-H4)",
-                   retail = "Retail (H5-H6)",
-                   non_saleable = "Non-saleable (H7-H10)",
-                   forest_floor = "Forest floor (LFH)",
-                   mineral = "Mineral substrate (C)")
-
-classify_grade <- function(df) {
-  dplyr::mutate(df, grade = dplyr::case_when(
-    !is.na(band)                                              ~ band,
-    grepl(.forest_floor_pat, toupper(trimws(horizon)))        ~ "forest_floor",
-    TRUE                                                      ~ "mineral"),
-    grade = factor(grade, levels = .grade_levels))
-}
+# Grade palette, legend labels, and classify_grade() — shared with 04_visualize
+# so the appendix fence diagrams read identically to the main peat figures.
+source(here::here("analysis/peat/grade_palette.R"))
 
 # Turn a vector of plot *numbers* (e.g. c(15,16,17)) or full IDs ("PL15") into
 # zero-padded hole IDs matching the data.
@@ -116,8 +99,8 @@ draw_section <- function(label, sec_ids, intervals, hole_summary, ownership, pts
               colour = "Water table"), linetype = "dashed") +
     geom_text(data = sec_xy, aes(x = dist_m, y = 20, label = plot_id),
               angle = 90, hjust = 0, size = 2.6) +
-    scale_fill_manual(values = .band_cols, name = "Layer", drop = FALSE,
-                      labels = .grade_labels) +
+    scale_fill_manual(values = band_cols, name = "Layer", drop = FALSE,
+                      labels = grade_labels) +
     scale_colour_manual(name = NULL, breaks = ann_lvls,
       values = c("Mineral base" = "grey40",
                  "50 cm reclamation buffer" = "red",

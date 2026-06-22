@@ -14,7 +14,7 @@ params:
   road_buffer_m: 5         # for the assumptions text — must match 03_transform
   utility_buffer_m: 30     # for the assumptions text — must match 03_transform
   basemap: false           # TRUE to fetch an Esri World Imagery backdrop (needs maptiles + internet)
-  section_holes: "PL17, PL16, PL15, PL21, PL09, PL04, PL05, PL01"  # ordered transect for the cross-section
+  section_holes: ""        # ordered transect for the single cross-section; empty = skip (per-project, e.g. "PL05, PL04, PL01")
   output_dir: "reports/figures"
 ---
 
@@ -26,6 +26,9 @@ library(ggplot2)
 library(sf)
 library(terra)
 library(here)
+# Shared grade palette / legend labels / classify_grade() — single source of
+# truth, also used by analysis/peat/cross_sections.R (appendix fence diagrams).
+source(here("analysis/peat/grade_palette.R"))
 dir.create(here(params$output_dir), showWarnings = FALSE, recursive = TRUE)
 ```
 
@@ -186,30 +189,16 @@ if (file.exists(excl_path)) {
 ## Per-hole peat profiles by Von Post humification
 
 ```{r fig-profiles, fig.height=6}
-# Non-peat layers carry no Von Post grade (band = NA); split them for the figure
-# into forest floor (LFH / L-F-H folic) and mineral substrate (C/Cg, A/B).
-forest_floor_pat <- "^(LFH|LF|FH|L|F|H)$"
-grade_levels <- c("professional", "retail", "non_saleable", "forest_floor", "mineral")
-band_cols <- c(professional = "#1a9850", retail = "#fee08b",
-               non_saleable = "#8c510a", forest_floor = "#c8a165",
-               mineral = "#9e9e9e")
-
+# Grade palette, levels, labels and classify_grade() come from grade_palette.R
+# (sourced in setup) so this figure shares one legend key with the cross-sections.
 p_prof <- intervals |>
-  mutate(grade = dplyr::case_when(
-           !is.na(band)                              ~ band,
-           grepl(forest_floor_pat, toupper(trimws(horizon))) ~ "forest_floor",
-           TRUE                                      ~ "mineral"),
-         grade = factor(grade, levels = grade_levels)) |>
+  classify_grade() |>
   ggplot(aes(x = plot_id,
              ymin = -depth_bot_cm, ymax = -depth_top_cm,
              colour = grade)) +
   geom_linerange(linewidth = 8) +
   scale_colour_manual(values = band_cols, name = "Layer", drop = FALSE,
-                      labels = c(professional = "Professional (H1-H4)",
-                                 retail = "Retail (H5-H6)",
-                                 non_saleable = "Non-saleable (H7-H10)",
-                                 forest_floor = "Forest floor (LFH)",
-                                 mineral = "Mineral substrate (C)")) +
+                      labels = grade_labels) +
   scale_y_continuous(labels = ~ abs(.)) +
   labs(title = "Peat Profiles by Grade", x = "Test hole", y = "Depth (cm)") +
   theme_bw() +
@@ -265,6 +254,13 @@ interpolated; see DESIGN).
 sec_ids <- trimws(strsplit(params$section_holes, ",")[[1]])
 sec_ids <- sec_ids[sec_ids != ""]
 
+# The transect is project-specific. With no section_holes supplied, skip this
+# single cross-section (the appendix A–I series from cross_sections.R is the
+# primary cross-section output); a named-but-missing hole is still a hard error.
+make_section <- length(sec_ids) > 0
+```
+
+```{r fig-cross-section-build, fig.height=5, eval=make_section}
 # Chosen holes in transect order, with coordinates, depth and water table.
 sec_xy <- hole_summary |>
   distinct(plot_id, gps_easting, gps_northing, mineral_depth_cm, water_table_depth_m)
@@ -279,14 +275,10 @@ sec_xy$dist_m <- cumsum(c(0, sqrt(diff(sec_xy$gps_easting)^2 +
 sec_xy <- left_join(sec_xy, distinct(intervals, plot_id, recl_line_cm), by = "plot_id")
 sec_xy$wt_cm <- sec_xy$water_table_depth_m * 100   # water-table depth (cm)
 
-# Real logged intervals for those holes, classified to the same grade palette.
+# Real logged intervals for those holes, classified to the shared grade palette.
 sec_intervals <- intervals |>
   filter(plot_id %in% sec_ids) |>
-  mutate(grade = dplyr::case_when(
-           !is.na(band)                                      ~ band,
-           grepl(forest_floor_pat, toupper(trimws(horizon))) ~ "forest_floor",
-           TRUE                                              ~ "mineral"),
-         grade = factor(grade, levels = grade_levels)) |>
+  classify_grade() |>
   left_join(sec_xy[, c("plot_id", "dist_m")], by = "plot_id")
 
 bar_w   <- 0.012 * max(sec_xy$dist_m)   # core column half-width (m)
@@ -301,24 +293,17 @@ p_section <- ggplot() +
             colour = "Mineral base"), linetype = "dashed") +
   geom_line(data = sec_xy, aes(x = dist_m, y = -recl_line_cm,               # reclamation buffer
             colour = "50 cm reclamation buffer"), linetype = "dashed") +
-  geom_point(data = sec_xy, aes(x = dist_m, y = -wt_cm,                     # water table
-             colour = "Water table"), shape = 25, fill = "dodgerblue3", size = 2) +
+  geom_line(data = sec_xy, aes(x = dist_m, y = -wt_cm,                      # water table
+            colour = "Water table"), linetype = "dashed") +
   geom_text(data = sec_xy, aes(x = dist_m, y = 20, label = plot_id),
             angle = 90, hjust = 0, size = 2.6) +
   scale_fill_manual(values = band_cols, name = "Layer", drop = FALSE,
-                    labels = c(professional = "Professional (H1-H4)",
-                               retail = "Retail (H5-H6)",
-                               non_saleable = "Non-saleable (H7-H10)",
-                               forest_floor = "Forest floor (LFH)",
-                               mineral = "Mineral substrate (C)")) +
+                    labels = grade_labels) +
   scale_colour_manual(name = NULL, breaks = ann_lvls,
     values = c("Mineral base" = "grey40",
                "50 cm reclamation buffer" = "red",
                "Water table" = "dodgerblue3"),
-    guide = guide_legend(order = 2, override.aes = list(
-      linetype = c("dashed", "dashed", "blank"),
-      shape    = c(NA, NA, 25),
-      fill     = c(NA, NA, "dodgerblue3")))) +
+    guide = guide_legend(order = 2, override.aes = list(linetype = "dashed"))) +
   scale_y_continuous(labels = ~ abs(.), expand = expansion(mult = c(0.04, 0.22))) +
   labs(title = "Peat Cross-Section (logged test holes along transect)",
        subtitle = paste(sec_ids, collapse = " → "),
@@ -364,7 +349,7 @@ thick_long <- hole_summary |>
 p_thick <- thick_long |>
   ggplot(aes(x = reorder(plot_id, -thickness_cm), y = thickness_cm, fill = grade)) +
   geom_col(position = "dodge") +
-  scale_fill_manual(values = c(Professional = "#1a9850", Retail = "#fee08b")) +
+  scale_fill_manual(values = harvest_cols) +
   labs(title = "Harvestable Peat Thickness by Hole (net of reclamation)",
        x = "Test hole", y = "Thickness (cm)", fill = NULL) +
   theme_bw() +
