@@ -2,6 +2,11 @@
 title: "Peat Exploration & Resource Assessment"
 subtitle: "`r params$project_name`"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
+bibliography: references.bib
+link-citations: true
+nocite: |
+  @goa_awidd2015, @goa_wetlandpolicy2013, @goa_waterpermanence2015, @cssc1998,
+  @terra2024, @rcoreteam2024
 format:
   docx:
     reference-doc: report_style.docx
@@ -90,7 +95,8 @@ size of the deposit, prior work, and the intended end use of the peat resource.]
 
 The objective of this exploration is to characterise the peat resource and
 estimate the **net harvestable volume by product grade**. Peat is classified for
-saleability using the Von Post humification scale, following the client product
+saleability using the Von Post humification scale [@vonpost1922; @stanek1977],
+following the client product
 specification:
 
 - **Professional grade** — H1–H4 (low humification, fibric/mesic peat)
@@ -102,12 +108,22 @@ specification:
 *[Insert physical setting, wetland class/form, surface vegetation, hydrology, and
 access constraints relevant to harvest planning.]*
 
+The study area is shown in @fig-area-overview — a drone orthomosaic with the
+ownership and approved-harvest boundaries and the test-hole network overlaid.
+
+```{r}
+#| label: fig-area-overview
+#| fig-cap: "Area overview — drone orthomosaic with ownership and approved-harvest boundaries and labelled test holes."
+#| eval: !expr "file.exists(figp('area_overview'))"
+knitr::include_graphics(figp("area_overview"))
+```
+
 # Methods
 
 ## Field Investigation
 
 Test holes were advanced across the deposit on a survey grid. At each hole the
-crew recorded AWCS wetland class, dominant surface bryophyte, total peat depth,
+crew recorded AWCS wetland class [@goa_awcs2015], dominant surface bryophyte, total peat depth,
 depth to water table, pH, electrical conductivity, and Von Post humification by
 depth interval. Per-hole observations are tabulated in @tbl-peat-field (Appendix B).
 
@@ -179,7 +195,9 @@ knitr::kable(peat_unc$headline, row.names = FALSE)
 #| label: note-peat-harvestable
 #| output: asis
 #| eval: !expr has_peat
-cat(peat_unc$note)
+# Render the note as a styled table footnote (small italic, via the Table Note
+# paragraph style in report_style.docx) directly beneath the table.
+cat("\n::: {custom-style=\"Table Note\"}\n", peat_unc$note, "\n:::\n", sep = "")
 ```
 
 ```{r}
@@ -218,12 +236,59 @@ knitr::include_graphics(figp("map_retail_setbacks"))
 
 ## Uncertainty
 
-The bootstrap distribution of total harvestable volume (@fig-peat-bootstrap)
-reflects sampling uncertainty from the limited number of test holes.
+The volume estimates depend on two things the reader should be able to weigh:
+how the thickness surface is interpolated between test holes, and how much the
+estimate could move given that only a limited number of holes were drilled. Both
+are made explicit below.
+
+### Interpolation method and assumptions
+
+Harvestable thickness is interpolated between test holes by **inverse distance
+weighting (IDW)** [@shepard1968] — each grid cell is a distance-weighted average of the
+surrounding holes, so nearer holes carry more weight. The settings are:
+
+- **Distance-decay power = 2** (the standard IDW exponent): weight falls off with
+  the square of distance, a moderate setting that neither over-smooths nor lets a
+  single nearby hole dominate.
+- **Global search** (all holes inform every cell), appropriate for the hole count
+  and spacing here; no maximum search radius is imposed.
+- **Grid resolution set from the data** — the mean nearest-neighbour spacing
+  between holes divided by ten (clamped to 5–25 m). Resolution governs how
+  finely the boundaries and exclusions are clipped when integrating volume; it
+  does not change the interpolated values, which are fixed by hole density.
+- **Volume by fractional cell coverage** — each cell contributes its thickness
+  times the fraction of its area inside the boundary (and outside any exclusion),
+  so setbacks and corridors narrower than a cell are captured proportionally
+  rather than rounded in or out.
+
+IDW is an exact interpolator (it honours the logged value at each hole) and makes
+no distributional assumptions about the peat. Its main limitation is the one
+inherent to any interpolation from sparse points: between widely spaced holes the
+surface is a smooth average and will not capture unobserved local variation. The
+sensitivity of the estimate to the IDW power is reported in the parameter-
+sensitivity analysis (a deterministic scenario span, separate from the bootstrap
+range below).
+
+### Sampling uncertainty (bootstrap)
+
+The dominant uncertainty is **sampling uncertainty** — the deposit was
+characterised from a limited number of test holes, and a different set of holes
+would have produced a somewhat different surface. This is quantified by
+**bootstrap resampling** [@efron1993]: the holes are resampled with replacement, the thickness
+surface is re-interpolated and the volume re-integrated, and this is repeated many
+times to build a distribution of plausible volumes. The central 90% of that
+distribution is the interval reported in @tbl-peat-harvestable.
+
+@fig-peat-bootstrap shows the resulting distribution for each grade and area. The
+**solid red line is the reported estimate** (the base IDW value in
+@tbl-peat-harvestable) and the **shaded band the 90% interval**, so the spread
+around the headline number is visible directly. The bootstrap reflects sampling
+uncertainty only — it does not include measurement or Von Post-classification
+error, which are treated as secondary here.
 
 ```{r}
 #| label: fig-peat-bootstrap
-#| fig-cap: "Bootstrap distribution of harvestable volume, reflecting sampling uncertainty from the limited number of test holes."
+#| fig-cap: "Bootstrap distribution of harvestable volume by grade and area. Solid red line = reported estimate; shaded band and dashed lines = 90% bootstrap interval (both from the net-harvestable table)."
 #| eval: !expr has_peat
 knitr::include_graphics(figp("peat_bootstrap"))
 ```
@@ -234,7 +299,73 @@ knitr::include_graphics(figp("peat_bootstrap"))
 after exclusions, the associated uncertainty, and any recommendations for further
 investigation or harvest planning.]*
 
-# Appendix A — Cross-Section Figures {.unnumbered}
+# Closure
+
+This report is valid for three years past the field assessment date to ensure
+that the peat resource characterization remains representative of site
+conditions. Green Plan advises that any necessary approvals, licenses, and
+permits are secured prior to the commencement of any harvest or construction
+activities. All regulatory and mitigation requirements should be reviewed prior
+to further activities to ensure that they are understood and implemented as
+described.
+
+This Peat Exploration & Resource Assessment was prepared to characterize the peat
+resource within the vicinity of the Project, estimate the net harvestable volume
+by product grade, and to support planning and applications for the provincial and
+federal approvals required for the proposed peat harvest. This report presents
+information available at the time of writing, as well as best management practices
+and provincial and federal regulations effective at the time of writing. If you
+have any questions or require additional details, please contact the undersigned.
+
+Sincerely,
+
++-----------------------------------------------------------+
+| **Report prepared by:**                                   |
++-----------------------------------------------------------+
+|                                                           |
+|                                                           |
++-----------------------------------------------------------+
+| *[Name], [Designation]*                                   |
+|                                                           |
+| *[Title], Green Plan Ltd.*                                |
++-----------------------------------------------------------+
+| **Report reviewed by:**                                   |
++-----------------------------------------------------------+
+|                                                           |
+|                                                           |
++-----------------------------------------------------------+
+| *[Name], [Designation]*                                   |
+|                                                           |
+| *[Title], Green Plan Ltd.*                                |
++-----------------------------------------------------------+
+
+# References {.unnumbered}
+
+::: {#refs}
+:::
+
+# Appendix A — Record Searches {.unnumbered}
+
+*[Insert the results of regulatory and historical record searches — e.g. Alberta
+Environment and Protected Areas approvals and Water Act records, historical land
+use and air photos, and any prior peat or wetland investigations relevant to the
+deposit.]*
+
+# Appendix B — Per-Hole Field Logs {.unnumbered}
+
+Per-hole field measurements recorded at each test hole: AWCS wetland class,
+dominant surface bryophyte, depth to mineral contact, depth to water table, pH,
+electrical conductivity, and harvestable thickness by product grade (net of the
+0.5 m basal reclamation allowance).
+
+```{r}
+#| label: tbl-peat-field
+#| tbl-cap: "Per-hole field summary. Harvestable thicknesses are net of the 0.5 m basal reclamation allowance; \"—\" = not recorded (e.g. frozen ground) or not applicable (Upland anchor)."
+#| eval: !expr has_peat
+knitr::kable(peat_field, row.names = FALSE)
+```
+
+# Appendix C — Cross-Section Figures {.unnumbered}
 
 Stratigraphic fence diagrams along selected test-hole transects. Each hole is
 drawn as its real logged grade column at its true along-transect distance; the
@@ -271,25 +402,13 @@ xfiles <- xfiles[startsWith(basename(xfiles), paste0(params$project_id, "_"))]
 xfiles <- xfiles[order(basename(xfiles))]
 for (f in xfiles) {
   letter <- sub(".*_cross_section_([A-Z])\\.png$", "\\1", basename(f))
-  cat(sprintf("\n\n![Cross-Section %s.](%s)\n\n", letter, gsub("\\\\", "/", f)))
+  # Fixed width (landscape page) so the sections are a consistent size rather
+  # than auto-scaled; keepNext (added by the finaliser) holds the caption with it.
+  cat(sprintf("\n\n![Cross-Section %s.](%s){width=9in}\n\n", letter, gsub("\\\\", "/", f)))
 }
 ```
 
-# Appendix B — Per-Hole Field Logs {.unnumbered}
-
-Per-hole field measurements recorded at each test hole: AWCS wetland class,
-dominant surface bryophyte, depth to mineral contact (peat depth), depth to water
-table, pH, electrical conductivity, and harvestable thickness by product grade
-(net of the 0.5 m basal reclamation allowance).
-
-```{r}
-#| label: tbl-peat-field
-#| tbl-cap: "Per-hole field summary. Harvestable thicknesses are net of the 0.5 m basal reclamation allowance; \"—\" = not recorded (e.g. frozen ground) or not applicable (Upland anchor)."
-#| eval: !expr has_peat
-knitr::kable(peat_field)
-```
-
-# Appendix C — Photo Log {.unnumbered}
+# Appendix D — Photo Log {.unnumbered}
 
 Site and test-hole photographs. To populate this log, add a CSV manifest with
 `file` and `caption` columns — one row per photo, `file` paths relative to the
