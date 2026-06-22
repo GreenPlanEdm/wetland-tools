@@ -68,6 +68,13 @@ analysis/**/*_files/
 # Project field data — never commit
 data-raw/projects/
 
+# Pipeline intermediates derived from client data (the analysis Rmds write
+# {project_id}_*.rds to the data-raw/ root) — never commit
+data-raw/*.rds
+
+# Generated report figures / rasters (derived from client data) — never commit
+reports/figures/
+
 # Original Excel/PDF sources of reference tables (large; CSV is canonical)
 data-raw/*.xlsx
 data-raw/*.xls

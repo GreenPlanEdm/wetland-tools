@@ -1,0 +1,335 @@
+---
+title: "Peat Exploration & Resource Assessment"
+subtitle: "`r params$project_name`"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+format:
+  docx:
+    reference-doc: report_style.docx
+    toc: true
+    toc-depth: 3
+    lof: true
+    lot: true
+    number-sections: true
+  html:
+    toc: true
+    toc-location: left
+    number-sections: true
+execute:
+  echo: false
+  warning: false
+  message: false
+params:
+  project_id:   "PROJECT_ID"
+  project_name: "Project Name"
+  client:       "Client Name"
+  prepared_by:  "Green Plan Ltd."
+  figure_dir:   "reports/figures"
+  map_style:    "contour"   # thickness-map style: "contour" or "plain"
+  photo_manifest: ""        # CSV (columns: file, caption) for the Appendix C photo log
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(dplyr)
+library(knitr)
+library(here)
+
+peat_field_csv <- here("data-raw", paste0(params$project_id, "_peat_field_summary.csv"))
+peat_unc_rds   <- here("data-raw", paste0(params$project_id, "_peat_uncertainty.rds"))
+has_peat       <- file.exists(peat_field_csv) && file.exists(peat_unc_rds)
+
+# Read the pipeline outputs once here; every table/figure below references these
+# objects so the headline volumes are guaranteed identical across the report.
+peat_unc   <- if (has_peat) readRDS(peat_unc_rds) else NULL
+peat_field <- if (has_peat) read.csv(peat_field_csv, check.names = FALSE,
+                                     fileEncoding = "UTF-8") else NULL
+
+# Project-prefixed figure path produced by analysis/peat/04_visualize.Rmd
+figp <- function(name, ext = ".png") {
+  here(params$figure_dir, paste0(params$project_id, "_", name, ext))
+}
+
+# Thickness-map style selector: "contour" uses the *_contour.png maps, "plain"
+# uses the unsuffixed ones. Lets the report show one map per grade without
+# editing chunks — flip params$map_style.
+map_suffix <- if (identical(params$map_style, "plain")) "" else "_contour"
+```
+
+```{r}
+#| label: missing-data-banner
+#| output: asis
+#| eval: !expr "!has_peat"
+cat("> **No peat module outputs found for `", params$project_id,
+    "`.** Run `analysis/peat/run_pipeline.R` (steps 01–05) to populate the ",
+    "tables and figures in this report.\n", sep = "")
+```
+
+# Executive Summary
+
+*[Summarise the harvestable peat resource: total area assessed, net harvestable
+volume split by professional (H1–H4) and retail (H5–H6) grade, the bootstrap
+uncertainty interval, and the volume remaining after harvest setbacks and
+infrastructure exclusions are applied.]*
+
+```{r}
+#| label: tbl-exec-summary
+#| tbl-cap: "Headline net harvestable peat volumes by product grade."
+#| eval: !expr has_peat
+knitr::kable(peat_unc$headline, row.names = FALSE)
+```
+
+# Introduction
+
+## Background
+
+*[Insert project background: who commissioned the exploration, the location and
+size of the deposit, prior work, and the intended end use of the peat resource.]*
+
+## Objectives
+
+The objective of this exploration is to characterise the peat resource and
+estimate the **net harvestable volume by product grade**. Peat is classified for
+saleability using the Von Post humification scale, following the client product
+specification:
+
+- **Professional grade** — H1–H4 (low humification, fibric/mesic peat)
+- **Retail grade** — H5–H6 (moderately decomposed peat)
+- **Non-saleable** — H7–H10 and the basal reclamation allowance
+
+## Site Description
+
+*[Insert physical setting, wetland class/form, surface vegetation, hydrology, and
+access constraints relevant to harvest planning.]*
+
+# Methods
+
+## Field Investigation
+
+Test holes were advanced across the deposit on a survey grid. At each hole the
+crew recorded AWCS wetland class, dominant surface bryophyte, total peat depth,
+depth to water table, pH, electrical conductivity, and Von Post humification by
+depth interval. Per-hole observations are tabulated in @tbl-peat-field (Appendix B).
+
+## Product Grade Classification
+
+Each depth interval was assigned to a product grade from its Von Post value using
+the client specification above. Harvestable thickness by grade was accumulated
+per hole, **net of a 0.5 m basal reclamation allowance** retained to support site
+reclamation; this allowance is not counted as a saleable resource.
+
+## Volume Estimation
+
+Per-hole harvestable thicknesses were interpolated across the deposit by inverse
+distance weighting (IDW) to produce continuous thickness surfaces for each
+product grade. Volumes were computed by integrating the banded thickness surfaces
+over the assessment area.
+
+## Harvest Setbacks and Infrastructure Exclusions
+
+Harvestable volumes were recomputed with regulatory and operational exclusions
+applied — setbacks from watercourses and waterbodies, and buffers around roads
+and other infrastructure — to give a constrained, operationally available volume.
+
+## Uncertainty Analysis
+
+Sampling uncertainty arising from the limited number of test holes was quantified
+by bootstrap resampling of the holes. Leave-one-out cross-validation (LOOCV) and
+sensitivity analysis on the interpolation parameters were used to check the
+robustness of the volume estimates.
+
+# Results
+
+## Peat Thickness and Stratigraphy
+
+Harvestable peat thickness at each test hole, split by product grade, is shown
+in @fig-peat-thickness, and per-hole stratigraphy — with the 0.5 m basal
+reclamation allowance marked — in @fig-peat-profiles-recl. Interpreted
+cross-sections along selected test-hole transects are provided in Appendix A.
+
+```{r}
+#| label: fig-peat-thickness
+#| fig-cap: "Harvestable peat thickness by test hole, split by product grade (net of the 0.5 m basal reclamation allowance)."
+#| eval: !expr has_peat
+knitr::include_graphics(figp("peat_thickness"))
+```
+
+```{r}
+#| label: fig-peat-profiles-recl
+#| fig-cap: "Per-hole peat profiles with the 0.5 m basal reclamation allowance removed."
+#| eval: !expr has_peat
+knitr::include_graphics(figp("peat_profiles_reclamation"))
+```
+
+## Harvestable Volume by Product Grade
+
+Net harvestable volumes by grade, with a 90% bootstrap interval on the
+harvestable rows, are given in @tbl-peat-harvestable. The professional- and
+retail-grade thickness surfaces are mapped in @fig-peat-professional and
+@fig-peat-retail.
+
+```{r}
+#| label: tbl-peat-harvestable
+#| tbl-cap: "Net harvestable peat by product grade, with a 90% bootstrap interval (sampling uncertainty) on the harvestable rows."
+#| eval: !expr has_peat
+knitr::kable(peat_unc$headline, row.names = FALSE)
+```
+
+```{r}
+#| label: note-peat-harvestable
+#| output: asis
+#| eval: !expr has_peat
+cat(peat_unc$note)
+```
+
+```{r}
+#| label: fig-peat-professional
+#| fig-cap: "Professional-grade (H1–H4) harvestable peat thickness."
+#| eval: !expr has_peat
+knitr::include_graphics(figp(paste0("map_professional", map_suffix)))
+```
+
+```{r}
+#| label: fig-peat-retail
+#| fig-cap: "Retail-grade (H5–H6) harvestable peat thickness."
+#| eval: !expr has_peat
+knitr::include_graphics(figp(paste0("map_retail", map_suffix)))
+```
+
+## Setback-Constrained Volumes
+
+With watercourse/waterbody setbacks and infrastructure buffers applied, the
+operationally available footprint is reduced as shown in @fig-peat-professional-setbacks
+and @fig-peat-retail-setbacks.
+
+```{r}
+#| label: fig-peat-professional-setbacks
+#| fig-cap: "Professional-grade harvestable peat after harvest setbacks and infrastructure exclusions."
+#| eval: !expr has_peat
+knitr::include_graphics(figp("map_professional_setbacks"))
+```
+
+```{r}
+#| label: fig-peat-retail-setbacks
+#| fig-cap: "Retail-grade harvestable peat after harvest setbacks and infrastructure exclusions."
+#| eval: !expr has_peat
+knitr::include_graphics(figp("map_retail_setbacks"))
+```
+
+## Uncertainty
+
+The bootstrap distribution of total harvestable volume (@fig-peat-bootstrap)
+reflects sampling uncertainty from the limited number of test holes.
+
+```{r}
+#| label: fig-peat-bootstrap
+#| fig-cap: "Bootstrap distribution of harvestable volume, reflecting sampling uncertainty from the limited number of test holes."
+#| eval: !expr has_peat
+knitr::include_graphics(figp("peat_bootstrap"))
+```
+
+# Conclusions
+
+*[State the net harvestable resource by grade, the operationally available volume
+after exclusions, the associated uncertainty, and any recommendations for further
+investigation or harvest planning.]*
+
+# Appendix A — Cross-Section Figures {.unnumbered}
+
+Stratigraphic fence diagrams along selected test-hole transects. Each hole is
+drawn as its real logged grade column at its true along-transect distance; the
+mineral base, 0.5 m reclamation line, and water table are connected between
+holes. The ground between holes is left blank — this is honest logged
+stratigraphy, not depth-resolved interpolation. The overview map (@fig-xsec-overview)
+locates every section; each section's test holes are labelled on the cores and in
+its location inset.
+
+Sections are lettered by location (north→south, then west→east) so they progress
+sensibly across the location map, and the holes within each section are ordered
+for left-to-right, top-to-bottom reading (west→east, then north→south) so each
+section reads the same way as the map. Cross-sections are generated by
+`analysis/peat/cross_sections.R`; the overview map is @fig-xsec-overview and the
+lettered sections follow.
+
+```{r}
+#| label: fig-xsec-overview
+#| fig-cap: "Cross-section location overview — test-hole transects A–I."
+#| eval: !expr "file.exists(figp('cross_section_overview'))"
+knitr::include_graphics(figp("cross_section_overview"))
+```
+
+```{r}
+#| label: xsec-series
+#| output: asis
+#| eval: !expr has_peat
+# Data-driven: emit every cross_section_<LETTER>.png present in figure_dir, in
+# letter order, so the appendix matches however many sections cross_sections.R
+# produced for this project (no fixed A–I list to keep in sync).
+xfiles <- list.files(here(params$figure_dir),
+                     pattern = "_cross_section_[A-Z]\\.png$", full.names = TRUE)
+xfiles <- xfiles[startsWith(basename(xfiles), paste0(params$project_id, "_"))]
+xfiles <- xfiles[order(basename(xfiles))]
+for (f in xfiles) {
+  letter <- sub(".*_cross_section_([A-Z])\\.png$", "\\1", basename(f))
+  cat(sprintf("\n\n![Cross-Section %s.](%s)\n\n", letter, gsub("\\\\", "/", f)))
+}
+```
+
+# Appendix B — Per-Hole Field Logs {.unnumbered}
+
+Per-hole field measurements recorded at each test hole: AWCS wetland class,
+dominant surface bryophyte, depth to mineral contact (peat depth), depth to water
+table, pH, electrical conductivity, and harvestable thickness by product grade
+(net of the 0.5 m basal reclamation allowance).
+
+```{r}
+#| label: tbl-peat-field
+#| tbl-cap: "Per-hole field summary. Harvestable thicknesses are net of the 0.5 m basal reclamation allowance; \"—\" = not recorded (e.g. frozen ground) or not applicable (Upland anchor)."
+#| eval: !expr has_peat
+knitr::kable(peat_field)
+```
+
+# Appendix C — Photo Log {.unnumbered}
+
+Site and test-hole photographs. To populate this log, add a CSV manifest with
+`file` and `caption` columns — one row per photo, `file` paths relative to the
+manifest's own folder — and pass its path to the report as the `photo_manifest`
+parameter. Photos are numbered separately from the report figures.
+
+```{r}
+#| label: setup-photos
+#| include: false
+photo_csv <- if (nzchar(params$photo_manifest)) here(params$photo_manifest) else ""
+photos    <- if (nzchar(photo_csv) && file.exists(photo_csv)) {
+  read.csv(photo_csv, stringsAsFactors = FALSE, fileEncoding = "UTF-8")
+} else {
+  data.frame(file = character(), caption = character())
+}
+has_photos <- nrow(photos) > 0
+```
+
+```{r}
+#| label: photos-placeholder
+#| output: asis
+#| eval: !expr "!has_photos"
+cat("*[No photographs logged yet. Add photo files and rows to the project's",
+    "`photos/photo_manifest.csv` (columns `file`, `caption`) to populate this",
+    "appendix.]*")
+```
+
+```{r}
+#| label: photo-log
+#| output: asis
+#| eval: !expr has_photos
+base_dir <- dirname(photo_csv)
+for (i in seq_len(nrow(photos))) {
+  img <- photos$file[i]
+  if (!file.exists(img)) img <- file.path(base_dir, img)   # resolve relative to manifest
+  cat(sprintf("\n\n**Photo %d.** %s\n\n![](%s){width=80%%}\n\n",
+              i, photos$caption[i], img))
+}
+```
+
+---
+
+*Report prepared by `r params$prepared_by` for `r params$client`.*

@@ -1,0 +1,148 @@
+---
+title: "Wetland Monitoring Report"
+subtitle: "`r params$project_name`"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+format:
+  docx:
+    reference-doc: report_style.docx
+    toc: true
+    toc-depth: 3
+    number-sections: true
+  html:
+    toc: true
+    toc-location: left
+    number-sections: true
+execute:
+  echo: false
+  warning: false
+  message: false
+params:
+  project_id:    "PROJECT_ID"
+  project_name:  "Project Name"
+  client:        "Client Name"
+  prepared_by:   "Green Plan Ltd."
+  figure_dir:    "reports/figures"
+  monitoring_year: ""
+  baseline_year:   ""
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(dplyr)
+library(knitr)
+library(here)
+
+# show_fig() — figure-if-exists-else-placeholder — shared with the WAIR
+# template. figure_dir must be set before sourcing the helper.
+figure_dir <- params$figure_dir
+source(here("reports/_report_helpers.R"))
+```
+
+# Executive Summary
+
+*[Summarise the monitoring event, condition relative to baseline and performance
+targets, key trends, and whether the wetland is trending toward or away from its
+target condition.]*
+
+# Introduction
+
+## Background and Monitoring Objectives
+
+*[Insert the reason for monitoring (e.g. post-reclamation, compensation site,
+ongoing condition tracking), the monitoring program objectives, and the
+performance targets against which condition is assessed.]*
+
+## Reference and Baseline Conditions
+
+*[Describe the baseline condition (year `r params$baseline_year`) and any reference
+sites used for comparison.]*
+
+# Methods
+
+## Monitoring Design
+
+*[Describe the monitoring design: plot/transect network, sampling frequency, and
+the monitoring events included in this report.]*
+
+## Vegetation Monitoring
+
+Vascular plant cover was recorded by plot and each species assigned a wetland
+indicator status (UPL, FACU, FAC, FACW, OBL). Plot-level UPL–OBL summaries,
+native/invasive composition, and noxious weed occurrence were derived for
+comparison across monitoring events.
+
+## Hydrology Monitoring
+
+*[Describe hydrology monitoring: water-level/permanence measurements and the
+imagery/LiDAR analysis used to characterise wetland hydrology over time.]*
+
+## Soils Monitoring
+
+Soil profiles were described following the CSSC; peat was characterised on the
+Von Post humification scale where present.
+
+# Results
+
+## Vegetation Condition and Trend
+
+Current-event wetland indicator cover by plot is shown in @fig-mon-upl-obl, with
+native versus invasive composition in @fig-mon-invasive and noxious weed
+occurrence in @fig-mon-noxious.
+
+```{r}
+#| label: fig-mon-upl-obl
+#| fig-cap: "Wetland indicator cover by plot, current monitoring event."
+show_fig("fig_upl_obl_by_plot.png", "wetland indicator cover by plot")
+```
+
+```{r}
+#| label: fig-mon-invasive
+#| fig-cap: "Native vs invasive cover by plot."
+show_fig("fig_native_invasive_by_plot.png", "native vs invasive cover by plot")
+```
+
+```{r}
+#| label: fig-mon-noxious
+#| fig-cap: "Noxious weed species heat map."
+show_fig("fig_noxious_heatmap.png", "noxious weed heat map")
+```
+
+## Hydrology
+
+*[Insert hydrology / water permanence figures and interpretation for the
+monitoring period.]*
+
+## Soils
+
+```{r}
+#| label: fig-mon-soils
+#| fig-cap: "Peat profiles by Von Post humification."
+show_fig("fig_peat_vonpost.png", "Von Post peat profiles")
+```
+
+# Comparison to Baseline and Performance Targets
+
+*[Compare current-event metrics against baseline (`r params$baseline_year`) and the
+program performance targets. A trend figure across monitoring events belongs
+here.]*
+
+```{r}
+#| label: fig-mon-trend
+#| fig-cap: "Vegetation metrics across monitoring events relative to performance targets."
+show_fig("fig_monitoring_trend.png", "monitoring trend across events")
+```
+
+# Trend Assessment
+
+*[Interpret whether each metric is trending toward or away from target condition,
+and whether the trajectory is consistent with monitoring objectives.]*
+
+# Conclusions and Adaptive Management Recommendations
+
+*[State the condition relative to targets, the assessed trend, and any adaptive
+management actions recommended for the next monitoring cycle.]*
+
+---
+
+*Report prepared by `r params$prepared_by` for `r params$client`.*

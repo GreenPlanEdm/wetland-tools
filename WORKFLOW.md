@@ -232,6 +232,40 @@ The pipeline is idempotent — re-running a step overwrites its own outputs, so 
 
 ---
 
+## Producing the report — the deliverable
+
+Once the data is entered and the analysis reviewed, the finished report is produced with **one action per project**.
+
+**The two halves** — keep them separate:
+
+- **The toolkit** (`wetland-tools`) is cloned **once** per machine and updated with `git pull`. Staff don't edit it.
+- **Each project** is a folder under `data-raw/projects/<PROJECT_ID>/` holding that client's Excel data, GIS layers, a small runner, and a `deliverables/` output folder. Everything here is gitignored — client data and finished reports never enter the repo.
+
+**One action.** Each project has a runner (e.g. `data-raw/projects/AD2026.015/run_report.R`). Open it in RStudio and click **Source**, or from a terminal at the repo root:
+
+```bash
+Rscript data-raw/projects/AD2026.015/run_report.R
+```
+
+It runs the full analysis, regenerates every figure (including the cross-section appendix), renders the report, and writes the finished Word document to:
+
+```
+data-raw/projects/<PROJECT_ID>/deliverables/<PROJECT_ID>_peat_report.docx
+```
+
+The only lines a new project changes are the **identity block** at the top of the runner (`project_id`, `project_name`, `client`). After editing wording in the report template, set `rebuild_analysis <- FALSE` to re-render just the report (skips the slow analysis).
+
+**Who does what:**
+
+| Role | Responsibilities |
+|---|---|
+| **Junior staff** | Transcribe paper forms into the project Excel workbook; drop GIS layers into the project folder; set the identity block and run the runner; review the QA/QC flags CSV; hand the draft to a senior. |
+| **Senior staff** | Define professional-judgment inputs (e.g. which test holes form each cross-section transect); review QA flags and make the classification / interpretation calls; edit the report prose (the *[Insert …]* placeholders in the template) and re-render; sign off the deliverable. |
+
+> **Toward a no-code future:** the runner already reduces interaction to editing three identity lines and clicking Source. A fully click-only front end (a parameter dialog, or a small Shiny app over the same runner) is the natural next step once the report template stabilises.
+
+---
+
 ## Where things live
 
 | Path | What it holds | Tracked in git? |
@@ -244,5 +278,6 @@ The pipeline is idempotent — re-running a step overwrites its own outputs, so 
 | `data-raw/*.csv` (whitelisted) | Reference table sources | ✅ yes |
 | `data-raw/build_reference_data.R` | CSV → `.rda` builder | ✅ yes |
 | `data/*.rda` | Built reference datasets | ✅ yes |
-| `data-raw/projects/<PROJECT_ID>/` | Client field data + project-specific Rmds | ❌ gitignored |
-| `reports/*.docx`, `reports/figures/*` | Rendered outputs and figures | ❌ gitignored |
+| `data-raw/projects/<PROJECT_ID>/` | Client field data + project-specific runners | ❌ gitignored |
+| `data-raw/projects/<PROJECT_ID>/deliverables/` | Finished client report (`.docx`) for that project | ❌ gitignored |
+| `reports/*.docx`, `reports/figures/*` | Intermediate rendered outputs and figures | ❌ gitignored |

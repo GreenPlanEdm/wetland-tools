@@ -1,0 +1,237 @@
+---
+title: "Peat Volume Uncertainty"
+date: "`r Sys.Date()`"
+output: html_document
+params:
+  project_id: "PROJECT_ID"
+  ownership_boundary: "data-raw/projects/ownership_boundary.shp"
+  waterbody_setback_m: 45  # for the table note — must match 03_transform
+  n_boot: 1000             # bootstrap resamples (0 to skip); ~2 min at 1000 on a 25-hole grid
+  boot_ci: 0.90            # central interval width for the bootstrap range
+  power_range: !r c(1, 2, 3)  # IDW power values for the parameter-sensitivity span
+  jitter_m: 0.5            # coordinate jitter (m) to de-duplicate bootstrap-resampled cores
+  seed: 42
+  output_dir: "reports/figures"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(dplyr)
+library(sf)
+library(terra)
+library(here)
+library(ggplot2)
+set.seed(params$seed)
+```
+
+This step quantifies **interpolation and sampling** uncertainty around the base
+IDW volumes. It produces three *distinct* kinds of range — they are reported
+separately and are **not additive**:
+
+  - **Bootstrap interval** (statistical): resample the test holes, re-interpolate
+    and re-integrate, take central percentiles. Captures the dominant *sampling*
+    uncertainty from having only ~25 holes. This is the client-facing range.
+  - **Parameter sensitivity** (scenario): volume under alternative but defensible
+    IDW power values — a deterministic min–max, not a probability. Appendix.
+  - **LOOCV RMSE** (validation): leave-one-out prediction error of the surface at
+    withheld holes — a goodness-of-fit metric, not a volume range. Appendix.
+
+It does **not** quantify Von Post / measurement / banding error.
+
+```{r load}
+hole_summary <- readRDS(here("data-raw", paste0(params$project_id, "_peat_hole_summary.rds")))
+geom         <- readRDS(here("data-raw", paste0(params$project_id, "_peat_geom.rds")))
+base_vol     <- readRDS(here("data-raw", paste0(params$project_id, "_peat_harvestable.rds")))
+
+ownership <- st_read(here(params$ownership_boundary), quiet = TRUE)
+
+# Interpolation points in the analysis (ownership) CRS — same construction as 03.
+make_points <- function(df, zone, epsg) {
+  sub <- dplyr::filter(df, utm_zone == zone)
+  if (nrow(sub) == 0) return(NULL)
+  st_as_sf(sub, coords = c("gps_easting", "gps_northing"), crs = epsg, remove = FALSE)
+}
+pts <- dplyr::bind_rows(
+  { p <- make_points(hole_summary, "11N", 26911); if (!is.null(p)) st_transform(p, st_crs(ownership)) },
+  { p <- make_points(hole_summary, "12N", 26912); if (!is.null(p)) st_transform(p, st_crs(ownership)) }
+)
+
+# Reuse the exact grid + clip geometry from 03_transform.
+template  <- terra::rast(terra::vect(ownership), resolution = geom$res_m)
+radius    <- geom$radius
+power0    <- geom$idw_power
+cell_area <- prod(terra::res(template))
+cov_app <- terra::rasterize(terra::vect(sf::st_sf(geometry = geom$approved_harv)),  template, cover = TRUE)
+cov_own <- terra::rasterize(terra::vect(sf::st_sf(geometry = geom$ownership_harv)), template, cover = TRUE)
+
+# Core table: coordinates + the two commercial band thicknesses (m).
+cores <- data.frame(
+  x      = sf::st_coordinates(pts)[, 1],
+  y      = sf::st_coordinates(pts)[, 2],
+  prof   = pts$prof_harv_m,
+  retail = pts$retail_harv_m
+)
+```
+
+```{r helpers}
+band_label <- c(prof = "Professional", retail = "Retail")
+
+# Interpolate a field from a core table over the grid, integrate over a coverage
+# raster -> volume (m³). Coverage weighting (not a centre mask) keeps it
+# consistent with 03 and resolution-robust.
+interp_vol <- function(df, field, cov, power = power0) {
+  v <- terra::vect(df, geom = c("x", "y"), crs = terra::crs(template))
+  s <- terra::interpIDW(template, v, field = field, radius = radius, power = power)
+  terra::global(s * cov, "sum", na.rm = TRUE)[1, 1] * cell_area
+}
+```
+
+## Bootstrap interval (sampling uncertainty)
+
+```{r bootstrap}
+boot <- NULL
+if (params$n_boot > 0) {
+  combos <- list(
+    c(band = "prof",   area = "approved"),  c(band = "retail", area = "approved"),
+    c(band = "prof",   area = "ownership"), c(band = "retail", area = "ownership")
+  )
+  draws <- matrix(NA_real_, nrow = params$n_boot, ncol = length(combos))
+  for (b in seq_len(params$n_boot)) {
+    d <- cores[sample(nrow(cores), replace = TRUE), ]
+    # Jitter de-duplicates coincident resampled cores (IDW can't take 1/d=Inf);
+    # 0.5 m is negligible on a ~25 m grid.
+    d$x <- d$x + rnorm(nrow(d), 0, params$jitter_m)
+    d$y <- d$y + rnorm(nrow(d), 0, params$jitter_m)
+    for (k in seq_along(combos)) {
+      cov_k <- if (combos[[k]]["area"] == "approved") cov_app else cov_own
+      draws[b, k] <- interp_vol(d, combos[[k]]["band"], cov_k)
+    }
+  }
+  lo <- (1 - params$boot_ci) / 2; hi <- 1 - lo
+  boot <- data.frame(
+    band = sapply(combos, `[`, "band"),
+    area = sapply(combos, `[`, "area"),
+    p_lo = apply(draws, 2, quantile, lo, na.rm = TRUE),
+    p_hi = apply(draws, 2, quantile, hi, na.rm = TRUE)
+  )
+}
+```
+
+```{r tbl-headline}
+# CLIENT-FACING REPORT TABLE: full net-harvestable table (all rows) with a
+# bootstrap interval on the two harvestable rows. Excluded rows show the point
+# estimate (their uncertainty is secondary and would clutter the headline).
+fmt <- function(x) formatC(round(x), big.mark = ",", format = "d")
+band_key <- c("Professional peat — harvestable" = "prof",
+              "Retail peat — harvestable"        = "retail")
+ci <- function(product, area) {
+  k <- band_key[product]
+  if (is.null(boot) || is.na(k)) return("—")          # em-dash for excluded rows
+  r <- boot[boot$band == k & boot$area == area, ]
+  if (!nrow(r)) return("—")
+  paste0(fmt(r$p_lo), " – ", fmt(r$p_hi))
+}
+headline <- data.frame(
+  Product = base_vol$product,
+  `Approved — estimate (m³)`     = fmt(base_vol$approved_m3),
+  `Approved — 90% interval (m³)` = vapply(base_vol$product, ci, "", area = "approved"),
+  `Ownership — estimate (m³)`    = fmt(base_vol$ownership_m3),
+  `Ownership — 90% interval (m³)`= vapply(base_vol$product, ci, "", area = "ownership"),
+  check.names = FALSE, row.names = NULL)
+knitr::kable(headline, row.names = FALSE,
+  caption = paste0("Net harvestable peat — ", params$project_id,
+    ". Base IDW estimate with a ", round(params$boot_ci * 100), "% bootstrap interval (",
+    params$n_boot, " resamples) on the harvestable rows, reflecting sampling ",
+    "uncertainty from the limited number of test holes. Intervals are not applied ",
+    "to the deduction rows."))
+```
+
+```{r note-headline, results='asis'}
+# Built into a variable so it can be saved with the table and reused verbatim by
+# the report (report_template.qmd), keeping the note traceable to this run's params.
+note_headline <- sprintf("
+*Notes on the table above:*
+
+- The **90%% interval** is a bootstrap range: the test holes were resampled %d times, re-interpolated and re-integrated, and the central %d%% of results reported. It expresses **sampling uncertainty** from the limited number of holes — not measurement or Von Post error — and is a statistical range (distinct from the parameter-sensitivity span in the appendix, which is a deterministic scenario; the two are not combined).
+- **Excluded — waterbody setback** is the harvestable peat within the %d m waterbody setback that would return if that setback were reduced/removed (its marginal contribution); **Excluded — other** is the boundary setback, roads, and utilities. The two harvestable rows plus the two excluded rows sum to the commercial in-place resource.
+- **Waterbody setback area:** a %d m buffer around every waterbody — polygons (lakes/ponds) and polylines (creeks/streams) — applied everywhere including the approved lands.
+",
+  as.integer(params$n_boot), as.integer(params$boot_ci * 100),
+  as.integer(params$waterbody_setback_m), as.integer(params$waterbody_setback_m))
+cat(note_headline)
+```
+
+```{r fig-bootstrap, fig.height=4}
+if (!is.null(boot)) {
+  dd <- as.data.frame(draws); names(dd) <- sapply(combos, function(c) paste(c["area"], c["band"]))
+  long <- tidyr::pivot_longer(dd, everything(), names_to = "series", values_to = "volume_m3")
+  g <- ggplot(long, aes(volume_m3)) +
+    geom_histogram(bins = 40, fill = "#2c7fb8", colour = "white") +
+    facet_wrap(~series, scales = "free", ncol = 2) +
+    scale_x_continuous(labels = scales::label_comma()) +
+    labs(title = "Bootstrap distribution of harvestable volume",
+         x = "Volume (m³)", y = "Resamples") +
+    theme_bw()
+  print(g)
+  ggsave(here(params$output_dir, paste0(params$project_id, "_peat_bootstrap.png")),
+         g, width = 9, height = 5, dpi = 300)
+}
+```
+
+## Appendix A — Model validation (LOOCV)
+
+```{r loocv}
+loocv_rmse_cm <- function(field) {
+  obs  <- cores[[field]]
+  pred <- vapply(seq_len(nrow(cores)), function(i) {
+    v  <- terra::vect(cores[-i, ], geom = c("x", "y"), crs = terra::crs(template))
+    si <- terra::interpIDW(template, v, field = field, radius = radius, power = power0)
+    terra::extract(si, terra::vect(cores[i, ], geom = c("x", "y"),
+                                   crs = terra::crs(template)))[1, 2]
+  }, numeric(1))
+  sqrt(mean((pred - obs)^2, na.rm = TRUE)) * 100   # m -> cm
+}
+loocv <- data.frame(
+  Band = c("Professional (H1–H4)", "Retail (H5–H6)"),
+  `LOOCV RMSE (cm)` = round(c(loocv_rmse_cm("prof"), loocv_rmse_cm("retail")), 1),
+  check.names = FALSE)
+knitr::kable(loocv, row.names = FALSE,
+  caption = paste0("Leave-one-out cross-validation of the base IDW surface (power ",
+                   power0, "): root-mean-square error of predicted vs observed ",
+                   "harvestable thickness at each withheld test hole. A surface-",
+                   "accuracy metric, not a volume range."))
+```
+
+## Appendix B — Parameter sensitivity (IDW power)
+
+```{r sensitivity}
+sens <- do.call(rbind, lapply(c("prof", "retail"), function(bd) {
+  va <- sapply(params$power_range, function(pw) interp_vol(cores, bd, cov_app, pw))
+  vo <- sapply(params$power_range, function(pw) interp_vol(cores, bd, cov_own, pw))
+  data.frame(
+    Band = band_label[bd],
+    `Approved — base (m³)`  = fmt(va[params$power_range == power0]),
+    `Approved — range (m³)` = paste0(fmt(min(va)), " – ", fmt(max(va))),
+    `Ownership — base (m³)` = fmt(vo[params$power_range == power0]),
+    `Ownership — range (m³)` = paste0(fmt(min(vo)), " – ", fmt(max(vo))),
+    check.names = FALSE)
+}))
+knitr::kable(sens, row.names = FALSE,
+  caption = paste0("Sensitivity of net harvestable volume to the IDW power ",
+    "(values ", paste(params$power_range, collapse = ", "), "; base = ", power0,
+    "). A deterministic scenario span under alternative interpolation settings, ",
+    "not a statistical confidence interval."))
+```
+
+```{r save}
+# headline + note are the report-ready net-harvestable table and its caption note;
+# saved here so report_template.qmd consumes them directly instead of re-deriving
+# the bootstrap-interval formatting.
+saveRDS(list(bootstrap = boot, loocv = loocv, sensitivity = sens,
+             n_boot = params$n_boot, boot_ci = params$boot_ci,
+             headline = headline, note = note_headline),
+        here("data-raw", paste0(params$project_id, "_peat_uncertainty.rds")))
+write.csv(headline,
+          here("data-raw", paste0(params$project_id, "_peat_harvestable_report.csv")),
+          row.names = FALSE)
+```

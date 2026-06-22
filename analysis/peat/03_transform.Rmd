@@ -1,0 +1,466 @@
+---
+title: "Peat Transformation, Volume & Spatial Interpolation"
+date: "`r Sys.Date()`"
+output: html_document
+params:
+  project_id: "PROJECT_ID"
+  approved_boundary: "data-raw/projects/approved_harvest_area.shp"
+  ownership_boundary: "data-raw/projects/ownership_boundary.shp"
+  boundary_setback_m: 30    # new-approval harvest setback from the property boundary (expansion remainder only; the approved area already incorporates its setback)
+  waterbody_setback_m: 45   # setback from waterbodies, applied everywhere incl. the approved lands (public-land default condition)
+  waterbodies_boundary: ""  # optional; comma-separated paths. Polygons (lakes/ponds) AND polylines (creeks/streams) both get the setback. "" = not applied
+  roads_boundary: ""        # optional roads (comma-separated ok); centerlines OR footprint polygons; "" = no infrastructure exclusion
+  road_half_width_m: 6      # half the running width — buffers road CENTERLINES into the surface (12 m road -> 6 m); ignored for polygon footprints
+  road_buffer_m: 5          # operational setback (m) beyond the road surface (ditch/shoulder/stability)
+  utilities_boundary: ""    # optional; comma-separated paths to pipelines / utilities / well heads & pads (points, lines or polygons). "" = not applied
+  utility_buffer_m: 30      # standard buffer (m) around all utilities
+  reclaim_depth_cm: 50      # material left on the mineral substrate for reclamation
+  raster_res_m: 0           # 0 = auto (mean nearest-neighbour core spacing / 10, clamped 5-25 m)
+  idw_power: 2              # IDW distance-decay exponent
+  idw_radius_m: 0           # 0 = auto (full extent diagonal → global IDW)
+  output_dir: "reports/figures"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(dplyr)
+library(sf)
+library(terra)
+library(here)
+dir.create(here(params$output_dir), showWarnings = FALSE, recursive = TRUE)
+```
+
+## Load clean data
+
+```{r load}
+peat     <- readRDS(here("data-raw", paste0(params$project_id, "_peat_clean.rds")))
+plots    <- peat$plots
+horizons <- peat$horizons
+```
+
+## Band each interval by Von Post humification
+
+Banding is **independent of vertical order**, so non-monotonic cores need no
+special handling — each interval is assigned by its own H value.
+
+  - **H1–H4 → professional** (premium horticultural grade)
+  - **H5–H6 → retail** (bagged garden grade)
+  - **H7–H10 → non-saleable** (reported, not harvested)
+
+```{r band}
+intervals <- horizons |>
+  mutate(
+    thickness_cm = depth_bot_cm - depth_top_cm,
+    h_num = suppressWarnings(as.integer(sub("^H", "", von_post))),
+    band  = dplyr::case_when(
+      h_num %in% 1:4  ~ "professional",
+      h_num %in% 5:6  ~ "retail",
+      h_num %in% 7:10 ~ "non_saleable",
+      TRUE            ~ NA_character_
+    )
+  )
+```
+
+## Apply the reclamation buffer (deepest 50 cm, by depth)
+
+The reclamation allowance is the **deepest `reclaim_depth_cm` of the physical
+column, whatever H values occupy it** — a contiguous basal layer left on the
+mineral substrate. We do *not* assume the base is non-saleable: a non-monotonic
+flip can put commercial peat at the bottom, and this geometry handles that.
+
+For each interval we split its thickness into the part **above** the reclamation
+line (harvestable) and the part **within** the buffer.
+
+```{r reclamation}
+recl <- params$reclaim_depth_cm
+
+# NA-safe max: NA (not -Inf) when a hole has no usable bottom depth, so a
+# degenerate hole propagates NA rather than a poisonous -Inf into the geometry.
+safe_max <- function(x) { x <- x[!is.na(x)]; if (length(x)) max(x) else NA_real_ }
+
+intervals <- intervals |>
+  group_by(plot_id) |>
+  mutate(
+    mineral_depth_cm = safe_max(depth_bot_cm),
+    recl_line_cm     = mineral_depth_cm - recl,                 # boundary depth
+    # portion of this interval shallower than the reclamation line:
+    harvest_cm = pmax(0, pmin(depth_bot_cm, recl_line_cm) - depth_top_cm),
+    buffer_cm  = thickness_cm - harvest_cm
+  ) |>
+  ungroup()
+```
+
+## Per-hole harvestable totals (total-resource interpretation)
+
+Commercial peat is summed across the whole column regardless of vertical
+position (a non-saleable layer above commercial peat is not treated as
+sterilising it). The four quantities below partition the full peat column with
+no double-counting:
+`prof_harv + retail_harv + nonsaleable + commercial_reclaim = peat depth`.
+
+```{r hole-summary}
+hole_summary <- intervals |>
+  group_by(plot_id) |>
+  summarise(
+    mineral_depth_cm = first(mineral_depth_cm),
+    # harvestable = commercial-grade AND above the reclamation line
+    prof_harv_cm   = sum(harvest_cm[band == "professional"], na.rm = TRUE),
+    retail_harv_cm = sum(harvest_cm[band == "retail"],       na.rm = TRUE),
+    # non-saleable = all H7–H10 anywhere in the column
+    nonsaleable_cm = sum(thickness_cm[band == "non_saleable"], na.rm = TRUE),
+    # commercial peat sacrificed to reclamation = H1–H6 within the basal buffer
+    commercial_reclaim_cm = sum(buffer_cm[band %in% c("professional", "retail")],
+                                na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  # thicknesses in metres for volume integration
+  mutate(
+    prof_harv_m            = prof_harv_cm / 100,
+    retail_harv_m          = retail_harv_cm / 100,
+    nonsaleable_m          = nonsaleable_cm / 100,
+    commercial_reclaim_m   = commercial_reclaim_cm / 100
+  ) |>
+  left_join(plots, by = "plot_id")
+
+hole_summary |>
+  select(plot_id, mineral_depth_cm, prof_harv_cm, retail_harv_cm,
+         nonsaleable_cm, commercial_reclaim_cm)
+```
+
+## Add upland holes as 0-thickness control points
+
+Test holes classed **Upland** have no peat profile, so they never appear in the
+per-hole summary above. We add them back as explicit **0-thickness anchors** so
+the interpolation drops toward zero at these known non-peat locations instead of
+extrapolating peat into them.
+
+```{r upland-anchors}
+upland_anchors <- plots |>
+  filter(awcs_wetland_class %in% "Upland", !plot_id %in% hole_summary$plot_id) |>
+  mutate(mineral_depth_cm = 0,
+         prof_harv_cm = 0, retail_harv_cm = 0,
+         nonsaleable_cm = 0, commercial_reclaim_cm = 0,
+         prof_harv_m = 0, retail_harv_m = 0,
+         nonsaleable_m = 0, commercial_reclaim_m = 0)
+
+hole_summary <- bind_rows(hole_summary, upland_anchors)
+
+cat(nrow(upland_anchors), "upland 0-thickness anchor(s) added:",
+    if (nrow(upland_anchors)) paste(upland_anchors$plot_id, collapse = ", ") else "none", "\n")
+```
+
+## Build spatial points (handles both UTM zones)
+
+```{r points}
+# Reproject everything to the CRS of the ownership boundary (the analysis CRS).
+source(here("analysis/peat/spatial_helpers.R"))
+ownership <- st_read(here(params$ownership_boundary), quiet = TRUE)
+approved  <- st_read(here(params$approved_boundary),  quiet = TRUE)
+target_crs <- st_crs(ownership)
+
+# Build hole points, each in its recorded UTM zone, reprojected to the analysis
+# CRS. Zone comes from the form's utm_zone column; see spatial_helpers.R.
+pts <- project_holes(hole_summary, target_crs)
+approved <- st_transform(approved, target_crs)
+
+pts_v       <- terra::vect(pts)
+approved_v  <- terra::vect(approved)
+ownership_v <- terra::vect(ownership)
+```
+
+## Resolve grid resolution from core spacing
+
+The interpolation grid is sized from the data: mean nearest-neighbour spacing
+between cores ÷ 10, clamped to 5–25 m. Resolution controls boundary-clipping
+accuracy for the volume integral, not the interpolated values (those are set by
+core density). Override by setting `raster_res_m` to a positive value.
+
+```{r resolution}
+nn_dist <- sf::st_distance(pts)            # pairwise distances (metres; CRS is UTM)
+diag(nn_dist) <- NA
+mean_nn <- mean(apply(nn_dist, 1, min, na.rm = TRUE))
+
+res_m <- params$raster_res_m
+if (is.null(res_m) || res_m <= 0) {
+  res_m <- max(5, min(25, round(mean_nn / 10)))
+}
+cat(sprintf("Mean nearest-neighbour core spacing: %.0f m  ->  grid resolution: %d m\n",
+            mean_nn, as.integer(res_m)))
+```
+
+## IDW interpolation over the area
+
+```{r interpolate}
+# Raster template spanning the ownership boundary (the larger extent).
+template <- terra::rast(ownership_v, resolution = res_m)
+
+# Auto radius = extent diagonal → every point contributes (global IDW).
+radius <- params$idw_radius_m
+if (is.null(radius) || radius <= 0) {
+  e <- terra::ext(template)
+  radius <- sqrt((e$xmax - e$xmin)^2 + (e$ymax - e$ymin)^2)
+}
+
+interp_field <- function(field) {
+  terra::interpIDW(template, pts_v, field = field,
+                   radius = radius, power = params$idw_power)
+}
+
+surf <- list(
+  professional        = interp_field("prof_harv_m"),
+  retail              = interp_field("retail_harv_m"),
+  non_saleable        = interp_field("nonsaleable_m"),
+  reclamation_loss    = interp_field("commercial_reclaim_m")
+)
+
+# Persist the surfaces for the visualization step.
+for (nm in names(surf)) {
+  terra::writeRaster(
+    surf[[nm]],
+    here(params$output_dir, paste0(params$project_id, "_thickness_", nm, ".tif")),
+    overwrite = TRUE)
+}
+```
+
+## Harvestable area: setbacks & infrastructure exclusions
+
+Setbacks and existing infrastructure are applied **only here, at the integration
+mask** — the IDW surfaces above are never altered. Peat is physically continuous
+beneath roads and within setbacks; these are *harvestability* constraints, not
+peat-absence. Each constraint is optional and a **no-op when its layer isn't
+supplied**, so the pipeline still runs on projects without these data.
+
+  - **Boundary setback** (`boundary_setback_m`, default 30 m): a new approval over
+    the property remainder requires a setback from the property boundary. Applied
+    to the **expansion remainder only** — the previously approved harvest area is
+    assumed to already incorporate its setback, so it keeps its full extent.
+  - **Waterbody setback** (`waterbody_setback_m`, default 45 m): applied
+    **everywhere, including the approved lands** (conservative — any Water Act
+    approval over the approved area may have expired). `st_buffer` handles both
+    **polygon** waterbodies (lakes/ponds → buffered outward) and **polyline**
+    waterbodies (creeks/streams → a corridor each side).
+  - **Roads** (`roads_boundary` + `road_buffer_m`): the digitised footprint plus
+    an operational buffer, removed as inaccessible/sterilised.
+
+```{r harvestable-region}
+# Buffer one or more (comma-separated) vector layers by `dist` and dissolve the
+# result. Works for polygons AND polylines, so a single helper covers waterbodies
+# (poly lakes + line creeks) and road footprints alike.
+buffer_union <- function(paths_csv, dist) {
+  if (is.null(paths_csv) || !nzchar(paths_csv)) return(NULL)
+  parts <- trimws(strsplit(paths_csv, ",")[[1]]); parts <- parts[parts != ""]
+  bufs <- lapply(parts, function(p) {
+    if (!file.exists(here(p))) { warning("layer not found, skipped: ", p); return(NULL) }
+    g <- sf::st_make_valid(sf::st_transform(sf::st_read(here(p), quiet = TRUE), target_crs))
+    sf::st_union(sf::st_buffer(sf::st_geometry(g), dist))
+  })
+  bufs <- bufs[!vapply(bufs, is.null, logical(1))]
+  if (!length(bufs)) return(NULL)
+  out <- bufs[[1]]; for (b in bufs[-1]) out <- sf::st_union(out, b)
+  sf::st_make_valid(out)
+}
+
+water_excl <- buffer_union(params$waterbodies_boundary, params$waterbody_setback_m)
+
+# Roads are geometry-aware: LINESTRING centerlines are buffered by `half_width`
+# to reconstruct the running surface (a 12 m road = 6 m half-width); POLYGON
+# footprints already represent the surface and are left as-is. The operational
+# `setback` (ditch/shoulder/stability) is then applied to whichever result.
+road_footprint <- function(paths_csv, half_width, setback) {
+  if (is.null(paths_csv) || !nzchar(paths_csv)) return(NULL)
+  parts <- trimws(strsplit(paths_csv, ",")[[1]]); parts <- parts[parts != ""]
+  geoms <- lapply(parts, function(p) {
+    if (!file.exists(here(p))) { warning("layer not found, skipped: ", p); return(NULL) }
+    g    <- sf::st_make_valid(sf::st_transform(sf::st_read(here(p), quiet = TRUE), target_crs))
+    geom <- sf::st_geometry(g)
+    is_line <- grepl("LINE", as.character(sf::st_geometry_type(g)))
+    if (any(is_line)) geom[is_line] <- sf::st_buffer(geom[is_line], half_width)  # centerline -> surface
+    sf::st_union(geom)
+  })
+  geoms <- geoms[!vapply(geoms, is.null, logical(1))]
+  if (!length(geoms)) return(NULL)
+  fp <- geoms[[1]]; for (b in geoms[-1]) fp <- sf::st_union(fp, b)
+  fp <- sf::st_make_valid(fp)
+  if (setback > 0) fp <- sf::st_make_valid(sf::st_buffer(fp, setback))           # operational setback
+  fp
+}
+roads_excl <- road_footprint(params$roads_boundary, params$road_half_width_m, params$road_buffer_m)
+
+# Utilities (pipelines, utility corridors, well heads & pads): a standard buffer
+# around each, regardless of geometry — pads buffer outward, pipelines into a
+# corridor each side, well-head points into a circle.
+utils_excl <- buffer_union(params$utilities_boundary, params$utility_buffer_m)
+
+# Harvestable regions (sf geometry):
+#   approved  -> kept as-is (already net of its own boundary setback)
+#   ownership -> approved (full extent) UNION the property shrunk by the boundary
+#                setback, so the 30 m setback applies only to the expansion remainder.
+expansion_sf   <- sf::st_make_valid(sf::st_buffer(ownership, -params$boundary_setback_m))
+approved_base  <- sf::st_geometry(sf::st_make_valid(approved))
+ownership_base <- sf::st_union(approved_base, sf::st_geometry(expansion_sf))
+
+# Remove exclusions from a region. `include_water` lets us also build a variant
+# WITHOUT the waterbody setback, so the waterbody's marginal contribution can be
+# reported separately — it's the setback most likely to change or shrink, and the
+# difference answers "how much harvestable peat would return if it did".
+apply_excl <- function(region, include_water = TRUE) {
+  region <- sf::st_make_valid(region)
+  if (include_water && !is.null(water_excl)) region <- sf::st_difference(region, water_excl)
+  if (!is.null(roads_excl)) region <- sf::st_difference(region, roads_excl)
+  if (!is.null(utils_excl)) region <- sf::st_difference(region, utils_excl)
+  sf::st_make_valid(region)
+}
+approved_harv          <- apply_excl(approved_base)
+ownership_harv         <- apply_excl(ownership_base)
+approved_harv_nowater  <- apply_excl(approved_base,  include_water = FALSE)
+ownership_harv_nowater <- apply_excl(ownership_base, include_water = FALSE)
+
+vv <- function(g) terra::vect(sf::st_sf(geometry = g))
+approved_harv_v          <- vv(approved_harv)
+ownership_harv_v         <- vv(ownership_harv)
+approved_harv_nowater_v  <- vv(approved_harv_nowater)
+ownership_harv_nowater_v <- vv(ownership_harv_nowater)
+
+# Buffered exclusion ZONES, labelled by layer, for the comparison maps in 04.
+# The boundary-setback zone is the perimeter strip removed from the expansion
+# remainder; the others are the buffers themselves. Clipped to the study area
+# for display only — the volume math above differences the unclipped buffers
+# against each boundary.
+own_geom  <- sf::st_union(sf::st_geometry(sf::st_make_valid(ownership)))
+appr_geom <- sf::st_union(sf::st_geometry(sf::st_make_valid(approved)))
+setback_zone <- sf::st_difference(sf::st_difference(own_geom, appr_geom),
+                                  sf::st_geometry(expansion_sf))
+
+zone <- function(geom, key, label) {
+  if (is.null(geom) || !length(geom) || all(sf::st_is_empty(geom))) return(NULL)
+  g <- suppressWarnings(sf::st_intersection(sf::st_make_valid(sf::st_geometry(geom)), own_geom))
+  if (!length(g) || all(sf::st_is_empty(g))) return(NULL)
+  sf::st_sf(key = key, type = label,
+            geometry = sf::st_cast(sf::st_union(g), "MULTIPOLYGON"))
+}
+exclusion_zones <- do.call(rbind, Filter(Negate(is.null), list(
+  zone(setback_zone, "boundary",  paste0("Boundary setback (", params$boundary_setback_m, " m)")),
+  zone(water_excl,   "waterbody", paste0("Waterbody setback (", params$waterbody_setback_m, " m)")),
+  zone(roads_excl,   "road",      "Road exclusion (footprint)"),
+  zone(utils_excl,   "utility",   paste0("Utilities buffer (", params$utility_buffer_m, " m)"))
+)))
+
+# Honest record of what was actually applied in this run (drives the assumptions
+# section in 04_visualize — never claim a deduction the numbers don't reflect).
+exclusions_applied <- data.frame(
+  exclusion = c("Boundary setback (expansion remainder)",
+                "Waterbody setback (everywhere)",
+                "Road exclusion",
+                "Utilities exclusion (pipelines, utilities, well heads/pads)"),
+  setting   = c(paste0(params$boundary_setback_m, " m"),
+                paste0(params$waterbody_setback_m, " m"),
+                paste0(2 * params$road_half_width_m, " m surface (centerlines) + ",
+                       params$road_buffer_m, " m setback"),
+                paste0(params$utility_buffer_m, " m")),
+  applied   = c(params$boundary_setback_m > 0, !is.null(water_excl),
+                !is.null(roads_excl), !is.null(utils_excl))
+)
+exclusions_applied
+```
+
+## Integrate volumes within each boundary
+
+`volume (m³) = Σ (cell thickness in m × cell area in m²)` over the clipped surface.
+CRS is metric UTM, so cell area is the product of the raster resolution. The
+**in-place** table integrates over the full boundaries (the geological resource);
+the **harvestable** table integrates the commercial surfaces over the harvestable
+region (boundary minus setbacks minus infrastructure).
+
+```{r volumes}
+# Area-weighted integration: rasterize the region to FRACTIONAL cell coverage
+# (cover = TRUE) rather than a cell-centre mask. This is essential for narrow
+# exclusions — a 12 m road or a thin setback strip is sub-pixel at the ~25 m
+# grid, so a centre-based mask would drop no cells and silently ignore the
+# deduction. Coverage weighting captures partial cells proportionally, so the
+# result is resolution-robust and the harvestable + excluded split reconciles
+# exactly to the in-place total.
+volume_in <- function(surface, region_v) {
+  cov <- terra::rasterize(region_v, surface, cover = TRUE)
+  cell_area <- prod(terra::res(surface))                 # m² per cell
+  terra::global(surface * cov, "sum", na.rm = TRUE)[1, 1] * cell_area
+}
+
+make_row <- function(label, surface) {
+  data.frame(
+    product      = label,
+    approved_m3  = volume_in(surface, approved_v),
+    ownership_m3 = volume_in(surface, ownership_v)
+  )
+}
+
+# In-place resource over the full boundaries (the geological partition).
+volumes <- bind_rows(
+  make_row("Professional peat (H1-H4)",        surf$professional),
+  make_row("Retail peat (H5-H6)",              surf$retail),
+  make_row("Non-saleable peat (H7-H10)",       surf$non_saleable),
+  make_row("Commercial peat left to reclamation", surf$reclamation_loss)
+) |>
+  mutate(across(c(approved_m3, ownership_m3), ~ round(.x, 0)))
+
+volumes
+
+# Net harvestable commercial peat = professional/retail surfaces integrated over
+# the harvestable region. The excluded line = commercial in-place minus net, so
+# the harvestable + excluded partition reconciles against the in-place table.
+harv_row <- function(label, surface) {
+  data.frame(
+    product      = label,
+    approved_m3  = volume_in(surface, approved_harv_v),
+    ownership_m3 = volume_in(surface, ownership_harv_v)
+  )
+}
+commercial_gross <- function(b_v) volume_in(surf$professional, b_v) + volume_in(surf$retail, b_v)
+commercial_net   <- function(h_v) volume_in(surf$professional, h_v) + volume_in(surf$retail, h_v)
+
+# Excluded volume is split so the waterbody setback (most likely to change) is
+# isolated from the rest. Waterbody = its MARGINAL contribution (extra peat
+# removed once everything else is already excluded); other = everything but water.
+# Net + waterbody-excluded + other-excluded reconciles to commercial in-place.
+harvestable <- bind_rows(
+  harv_row("Professional peat — harvestable", surf$professional),
+  harv_row("Retail peat — harvestable",       surf$retail),
+  data.frame(
+    product      = "Commercial peat excluded — waterbody setback",
+    approved_m3  = commercial_net(approved_harv_nowater_v)  - commercial_net(approved_harv_v),
+    ownership_m3 = commercial_net(ownership_harv_nowater_v) - commercial_net(ownership_harv_v)
+  ),
+  data.frame(
+    product      = "Commercial peat excluded — other setbacks & infrastructure",
+    approved_m3  = commercial_gross(approved_v)  - commercial_net(approved_harv_nowater_v),
+    ownership_m3 = commercial_gross(ownership_v) - commercial_net(ownership_harv_nowater_v)
+  )
+) |>
+  mutate(across(c(approved_m3, ownership_m3), ~ round(.x, 0)))
+
+harvestable
+```
+
+## Save
+
+```{r save}
+saveRDS(intervals,    here("data-raw", paste0(params$project_id, "_peat_transformed.rds")))
+saveRDS(hole_summary, here("data-raw", paste0(params$project_id, "_peat_hole_summary.rds")))
+saveRDS(volumes,      here("data-raw", paste0(params$project_id, "_peat_volumes.rds")))
+write.csv(volumes,
+          here("data-raw", paste0(params$project_id, "_peat_volumes.csv")),
+          row.names = FALSE)
+
+saveRDS(harvestable,        here("data-raw", paste0(params$project_id, "_peat_harvestable.rds")))
+saveRDS(exclusions_applied, here("data-raw", paste0(params$project_id, "_peat_exclusions.rds")))
+if (!is.null(exclusion_zones))
+  saveRDS(exclusion_zones,  here("data-raw", paste0(params$project_id, "_peat_exclusion_zones.rds")))
+
+# Grid settings + harvestable regions, so 05_uncertainty reuses the exact same
+# interpolation grid and clip geometry (single source of truth).
+saveRDS(list(res_m = res_m, radius = radius, idw_power = params$idw_power,
+             approved_harv = approved_harv, ownership_harv = ownership_harv),
+        here("data-raw", paste0(params$project_id, "_peat_geom.rds")))
+write.csv(harvestable,
+          here("data-raw", paste0(params$project_id, "_peat_harvestable.csv")),
+          row.names = FALSE)
+```

@@ -1,0 +1,480 @@
+---
+title: "Peat Visualization & Volume Tables"
+date: "`r Sys.Date()`"
+output: html_document
+params:
+  project_id: "PROJECT_ID"
+  approved_boundary: "data-raw/projects/approved_harvest_area.shp"
+  ownership_boundary: "data-raw/projects/ownership_boundary.shp"
+  roads_boundary: ""       # optional; drawn on the thickness maps (comma-separated paths ok)
+  waterbodies_boundary: "" # optional; polygons and/or lines drawn on the thickness maps
+  boundary_setback_m: 30   # for the assumptions text — must match the value used in 03_transform
+  waterbody_setback_m: 45  # for the assumptions text — must match 03_transform
+  road_half_width_m: 6     # for the assumptions text — must match 03_transform (12 m road = 6 m half-width)
+  road_buffer_m: 5         # for the assumptions text — must match 03_transform
+  utility_buffer_m: 30     # for the assumptions text — must match 03_transform
+  basemap: false           # TRUE to fetch an Esri World Imagery backdrop (needs maptiles + internet)
+  section_holes: ""        # ordered transect for the single cross-section; empty = skip (per-project, e.g. "PL05, PL04, PL01")
+  output_dir: "reports/figures"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
+                      fig.width = 7, fig.height = 6, dpi = 300)
+library(dplyr)
+library(ggplot2)
+library(sf)
+library(terra)
+library(here)
+# Shared grade palette / legend labels / classify_grade() — single source of
+# truth, also used by analysis/peat/cross_sections.R (appendix fence diagrams).
+source(here("analysis/peat/grade_palette.R"))
+# zone_epsg() / project_holes(): zone-safe hole points in one common CRS.
+source(here("analysis/peat/spatial_helpers.R"))
+dir.create(here(params$output_dir), showWarnings = FALSE, recursive = TRUE)
+```
+
+## Load transformed outputs
+
+```{r load}
+intervals    <- readRDS(here("data-raw", paste0(params$project_id, "_peat_transformed.rds")))
+hole_summary <- readRDS(here("data-raw", paste0(params$project_id, "_peat_hole_summary.rds")))
+volumes      <- readRDS(here("data-raw", paste0(params$project_id, "_peat_volumes.rds")))
+
+ownership <- st_read(here(params$ownership_boundary), quiet = TRUE)
+approved  <- st_transform(st_read(here(params$approved_boundary), quiet = TRUE),
+                          st_crs(ownership))
+
+# Test-hole points in the analysis (ownership) CRS, for overlaying on the maps.
+# Each hole is built in its recorded UTM zone, then reprojected; proj_x/proj_y
+# give zone-safe coordinates. Zone read per hole from utm_zone.
+pts <- project_holes(hole_summary, st_crs(ownership))
+pts_v <- terra::vect(pts)
+
+# Optional overlay layers for the maps (roads, waterbodies). Each param accepts
+# one or more comma-separated shapefiles; we pull out geometries by type so they
+# can be styled differently (waterbody polygons filled, lines drawn as lines).
+# Returns a terra SpatVector, or NULL when nothing matches (so the maps still
+# render on projects without these data).
+gather_v <- function(paths_csv, want = NULL) {
+  if (is.null(paths_csv) || !nzchar(paths_csv)) return(NULL)
+  parts <- trimws(strsplit(paths_csv, ",")[[1]]); parts <- parts[parts != ""]
+  geoms <- list()
+  for (p in parts) {
+    if (!file.exists(here(p))) next
+    g  <- st_transform(st_read(here(p), quiet = TRUE), st_crs(ownership))
+    gt <- as.character(st_geometry_type(g))
+    keep <- if (is.null(want)) rep(TRUE, length(gt)) else grepl(want, gt)
+    if (any(keep)) geoms[[length(geoms) + 1]] <- st_geometry(g)[keep]
+  }
+  if (!length(geoms)) return(NULL)
+  terra::vect(st_sf(geometry = do.call(c, geoms)))
+}
+roads_v      <- gather_v(params$roads_boundary,      "LINE")
+water_poly_v <- gather_v(params$waterbodies_boundary, "POLY")
+water_line_v <- gather_v(params$waterbodies_boundary, "LINE")
+
+# Buffered exclusion zones (saved by 03_transform), labelled by layer, for the
+# setback-comparison map set. Colours keyed to the associated layer.
+zones_path <- here("data-raw", paste0(params$project_id, "_peat_exclusion_zones.rds"))
+exclusion_zones <- if (file.exists(zones_path)) readRDS(zones_path) else NULL
+zone_cols <- c(boundary = "#7570b3", waterbody = "#08519c",
+               road = "#543005", utility = "#e6550d")
+```
+
+## Per-hole field summary
+
+```{r tbl-field-summary}
+# One row per test hole, surfacing the per-hole field measurements the client
+# (Sun Gro) asked for: AWCS wetland class, dominant surface bryophyte, depth to
+# water table, depth to mineral contact (peat depth), pH and EC — plus the
+# harvestable thickness split by product grade (professional H1-H4, retail
+# H5-H6, each net of the 0.5 m basal reclamation allowance). All columns already
+# live in hole_summary (intervals + the joined plots sheet); this just presents
+# them. NA-safe: frost/disturbance can leave individual fields unrecorded, and
+# Upland anchor holes carry 0 peat depth.
+num <- function(x, d) ifelse(is.na(x), "—",
+  formatC(round(as.numeric(x), d), format = "f", digits = d, big.mark = ","))
+chr <- function(x) ifelse(is.na(x) | !nzchar(as.character(x)), "—", as.character(x))
+
+field_tbl <- hole_summary |>
+  arrange(plot_id) |>
+  transmute(
+    `Test Hole`              = plot_id,
+    `Wetland Class (AWCS)`   = chr(awcs_wetland_class),
+    `Dominant Bryophyte`     = chr(dominant_bryophyte),
+    `Peat Depth (m)`         = num(mineral_depth_cm / 100, 2),
+    `Water Table (m)`        = num(water_table_depth_m, 2),
+    `pH`                     = num(ph, 1),
+    `EC (µS/cm)`             = num(conductivity_us_cm, 0),
+    `Professional H1-H4 (m)` = num(prof_harv_m, 2),
+    `Retail H5-H6 (m)`       = num(retail_harv_m, 2)
+  )
+
+# Save a report-ready CSV alongside the other pipeline outputs.
+write.csv(field_tbl,
+          here("data-raw", paste0(params$project_id, "_peat_field_summary.csv")),
+          row.names = FALSE, fileEncoding = "UTF-8")
+
+knitr::kable(
+  field_tbl,
+  align   = c("l", "l", "l", "r", "r", "r", "r", "r", "r"),
+  caption = paste0(
+    "Per-hole field summary — ", params$project_id,
+    ". One row per test hole: AWCS wetland classification, dominant surface ",
+    "bryophyte, depth to mineral contact (peat depth), depth to water table, pH, ",
+    "and electrical conductivity, with harvestable thickness by product grade ",
+    "(professional H1–H4, retail H5–H6) net of the 0.5 m basal reclamation ",
+    "allowance. “—” = not recorded in the field (e.g. frozen ground) or ",
+    "not applicable (Upland anchor holes carry 0 m peat). Harvestable thicknesses ",
+    "are the per-hole values interpolated for the volume estimates."))
+```
+
+## Volume summary table
+
+```{r tbl-volumes}
+knitr::kable(
+  volumes,
+  col.names = c("Product", "Approved area (m³)", "Ownership area (m³)"),
+  format.args = list(big.mark = ","),
+  caption = paste0("In-place peat resource — ", params$project_id,
+                   ". The geological partition over the full boundaries; ",
+                   "commercial grades are net of the reclamation allowance only."))
+```
+
+_The net harvestable peat table — with bootstrap uncertainty intervals on the
+harvestable rows, the waterbody/other excluded split, and accompanying notes — is
+produced in `05_uncertainty.Rmd` so it carries its uncertainty range. See that
+step's output for the report-ready table._
+
+## Assumptions and limitations
+
+```{r assumptions, results='asis'}
+excl_path <- here("data-raw", paste0(params$project_id, "_peat_exclusions.rds"))
+
+cat(sprintf("
+**Harvest setbacks.** Reported harvestable volumes exclude regulatory and operational setbacks as follows:
+
+- The **previously approved harvest area** is assumed to already incorporate its required boundary setback; no additional boundary setback is applied to it.
+- The **expansion area** (remainder of the property, which would require a new approval) is assumed to require a **%d m harvest setback** from the property boundary.
+- A **%d m setback from waterbodies** is applied throughout the study area, **including the previously approved lands** — applied conservatively because any *Water Act* approval over the approved lands may have expired and require updating under current conditions. Both polygon waterbodies (lakes/ponds) and polyline waterbodies (creeks/permanent streams) receive this setback.
+
+These setback distances reflect the conditions applicable to **public land**. If the property is **private**, the applicable setbacks may differ; this can be amended in a future report if required.
+
+**Existing infrastructure.** Peat beneath existing roads (constructed as fill/corduroy over intact peat) is present but not harvestable. Road centrelines are buffered to the **%d m** running width, plus a **%d m** operational setback (ditch/shoulder/stability), and that footprint is excluded from harvestable volume.
+
+**Utilities.** A standard **%d m** buffer is applied around all utilities — pipelines, utility corridors, and well heads/pads — and the buffered area is excluded from harvestable volume.
+
+**Method note.** Setbacks and infrastructure are applied only when integrating volume; the interpolated peat-thickness surfaces are not altered (peat is physically continuous beneath roads and within setbacks). Volumes are integrated by fractional cell coverage, so exclusions narrower than the grid cell (e.g. a road corridor) are captured proportionally rather than missed.
+",
+  as.integer(params$boundary_setback_m),
+  as.integer(params$waterbody_setback_m),
+  as.integer(2 * params$road_half_width_m),
+  as.integer(params$road_buffer_m),
+  as.integer(params$utility_buffer_m)))
+
+if (file.exists(excl_path)) {
+  ex <- readRDS(excl_path)
+  ex$applied <- ifelse(ex$applied, "applied", "**not applied — no layer supplied**")
+  cat("\n\n**Exclusions applied in this run** (the figures above reflect only the rows marked *applied*):\n\n")
+  print(knitr::kable(ex, col.names = c("Exclusion", "Setting", "Status")))
+}
+```
+
+## Per-hole peat profiles by Von Post humification
+
+```{r fig-profiles, fig.height=6}
+# Grade palette, levels, labels and classify_grade() come from grade_palette.R
+# (sourced in setup) so this figure shares one legend key with the cross-sections.
+p_prof <- intervals |>
+  classify_grade() |>
+  ggplot(aes(x = plot_id,
+             ymin = -depth_bot_cm, ymax = -depth_top_cm,
+             colour = grade)) +
+  geom_linerange(linewidth = 8) +
+  scale_colour_manual(values = band_cols, name = "Layer", drop = FALSE,
+                      labels = grade_labels) +
+  scale_y_continuous(labels = ~ abs(.)) +
+  labs(title = "Peat Profiles by Grade", x = "Test hole", y = "Depth (cm)") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p_prof
+ggsave(here(params$output_dir, paste0(params$project_id, "_peat_profiles.png")),
+       p_prof, width = 9, height = 5, dpi = 300)
+```
+
+## Per-hole peat profiles with the reclamation buffer
+
+The same profiles with a **dashed red line** at the base of the harvestable
+column (mineral depth − reclamation allowance). Everything below the line is the
+deepest material left in place for reclamation. Provided as a separate figure so
+it can be compared against the plain profiles above.
+
+```{r fig-profiles-reclamation, fig.height=6}
+reclaim_cm  <- round(stats::median(intervals$mineral_depth_cm - intervals$recl_line_cm))
+plot_levels <- sort(unique(intervals$plot_id))
+recl_label  <- paste0(reclaim_cm, " cm reclamation buffer")
+recl_lines  <- intervals |>
+  distinct(plot_id, recl_line_cm) |>
+  mutate(xpos = match(plot_id, plot_levels),
+         y    = -pmax(recl_line_cm, 0))   # clamp shallow holes to the surface
+
+# Map the line to a linetype aesthetic so it gets its own legend entry (drawn
+# red via override.aes), rather than explaining it in a subtitle.
+p_prof_recl <- p_prof +
+  geom_segment(data = recl_lines, inherit.aes = FALSE,
+               aes(x = xpos - 0.45, xend = xpos + 0.45, y = y, yend = y,
+                   linetype = recl_label),
+               colour = "red", linewidth = 0.7) +
+  scale_linetype_manual(name = NULL, values = setNames("dashed", recl_label),
+                        guide = guide_legend(override.aes = list(colour = "red"))) +
+  labs(title = "Peat Profiles by Grade with Reclamation Buffer")
+
+p_prof_recl
+ggsave(here(params$output_dir, paste0(params$project_id, "_peat_profiles_reclamation.png")),
+       p_prof_recl, width = 9, height = 5, dpi = 300)
+```
+
+## Cross-section (stratigraphic fence of logged test holes)
+
+A vertical section along a chosen transect of test holes (`params$section_holes`).
+Each hole is drawn as its **real logged grade column** at its true along-transect
+distance; the surface (0) and the mineral base are connected between holes. The
+ground between holes is left blank — this is honest logged stratigraphy, not
+depth-resolved interpolation (Von Post flips with depth, so grade-at-depth is not
+interpolated; see DESIGN).
+
+```{r fig-cross-section, fig.height=5}
+sec_ids <- trimws(strsplit(params$section_holes, ",")[[1]])
+sec_ids <- sec_ids[sec_ids != ""]
+
+# The transect is project-specific. With no section_holes supplied, skip this
+# single cross-section (the appendix A–I series from cross_sections.R is the
+# primary cross-section output); a named-but-missing hole is still a hard error.
+make_section <- length(sec_ids) > 0
+```
+
+```{r fig-cross-section-build, fig.height=5, eval=make_section}
+# Chosen holes in transect order, with coordinates, depth and water table. Use
+# the common-CRS coordinates (proj_x/proj_y) so distances are zone-safe.
+sec_xy <- sf::st_drop_geometry(pts) |>
+  distinct(plot_id, proj_x, proj_y, mineral_depth_cm, water_table_depth_m)
+sec_xy <- sec_xy[match(sec_ids, sec_xy$plot_id), ]
+if (anyNA(sec_xy$proj_x))
+  stop("section_holes not found in data: ",
+       paste(sec_ids[is.na(sec_xy$proj_x)], collapse = ", "))
+
+# Cumulative straight-line distance along the polyline through the holes (m).
+sec_xy$dist_m <- cumsum(c(0, sqrt(diff(sec_xy$proj_x)^2 +
+                                  diff(sec_xy$proj_y)^2)))
+sec_xy <- left_join(sec_xy, distinct(intervals, plot_id, recl_line_cm), by = "plot_id")
+sec_xy$wt_cm <- sec_xy$water_table_depth_m * 100   # water-table depth (cm)
+
+# Real logged intervals for those holes, classified to the shared grade palette.
+sec_intervals <- intervals |>
+  filter(plot_id %in% sec_ids) |>
+  classify_grade() |>
+  left_join(sec_xy[, c("plot_id", "dist_m")], by = "plot_id")
+
+bar_w   <- 0.012 * max(sec_xy$dist_m)   # core column half-width (m)
+ann_lvls <- c("Mineral base", "50 cm reclamation buffer", "Water table")
+
+p_section <- ggplot() +
+  geom_hline(yintercept = 0, colour = "grey40", linewidth = 0.4) +          # surface
+  geom_rect(data = sec_intervals,                                           # logged cores
+            aes(xmin = dist_m - bar_w, xmax = dist_m + bar_w,
+                ymin = -depth_bot_cm, ymax = -depth_top_cm, fill = grade)) +
+  geom_line(data = sec_xy, aes(x = dist_m, y = -mineral_depth_cm,           # mineral base
+            colour = "Mineral base"), linetype = "dashed") +
+  geom_line(data = sec_xy, aes(x = dist_m, y = -recl_line_cm,               # reclamation buffer
+            colour = "50 cm reclamation buffer"), linetype = "dashed") +
+  geom_line(data = sec_xy, aes(x = dist_m, y = -wt_cm,                      # water table
+            colour = "Water table"), linetype = "dashed") +
+  geom_text(data = sec_xy, aes(x = dist_m, y = 20, label = plot_id),
+            angle = 90, hjust = 0, size = 2.6) +
+  scale_fill_manual(values = band_cols, name = "Layer", drop = FALSE,
+                    labels = grade_labels) +
+  scale_colour_manual(name = NULL, breaks = ann_lvls,
+    values = c("Mineral base" = "grey40",
+               "50 cm reclamation buffer" = "red",
+               "Water table" = "dodgerblue3"),
+    guide = guide_legend(order = 2, override.aes = list(linetype = "dashed"))) +
+  scale_y_continuous(labels = ~ abs(.), expand = expansion(mult = c(0.04, 0.22))) +
+  labs(title = "Peat Cross-Section (logged test holes along transect)",
+       subtitle = paste(sec_ids, collapse = " → "),
+       x = "Distance along transect (m)", y = "Depth (cm)") +
+  theme_bw() +
+  guides(fill = guide_legend(order = 1))
+
+# Inset location map: study area, all holes, and the transect highlighted.
+transect_line <- sf::st_sfc(
+  sf::st_linestring(as.matrix(sec_xy[, c("proj_x", "proj_y")])),
+  crs = sf::st_crs(ownership))
+sec_pts <- pts |> filter(plot_id %in% sec_ids)
+
+inset <- ggplot() +
+  geom_sf(data = ownership, fill = "grey92", colour = "grey55", linewidth = 0.3) +
+  geom_sf(data = pts, colour = "grey55", size = 0.5) +
+  geom_sf(data = transect_line, colour = "black", linewidth = 0.7) +
+  geom_sf(data = sec_pts, colour = "red", size = 1.1) +
+  theme_void() +
+  theme(panel.background = element_rect(fill = "white", colour = "grey40"),
+        plot.margin = margin(1, 1, 1, 1))
+
+# Draw the section, then overlay the inset in the empty lower-left via a grid
+# viewport (print.ggplot uses newpage = is.null(vp), so it won't clear the page).
+draw_section <- function() {
+  print(p_section)
+  print(inset, vp = grid::viewport(x = 0.255, y = 0.34, width = 0.26, height = 0.30))
+}
+png(here(params$output_dir, paste0(params$project_id, "_peat_cross_section.png")),
+    width = 10, height = 5, units = "in", res = 300)
+draw_section()
+dev.off()
+draw_section()
+```
+
+## Harvestable thickness per hole
+
+```{r fig-thickness}
+thick_long <- hole_summary |>
+  select(plot_id, Professional = prof_harv_cm, Retail = retail_harv_cm) |>
+  tidyr::pivot_longer(-plot_id, names_to = "grade", values_to = "thickness_cm")
+
+p_thick <- thick_long |>
+  ggplot(aes(x = reorder(plot_id, -thickness_cm), y = thickness_cm, fill = grade)) +
+  geom_col(position = "dodge") +
+  scale_fill_manual(values = harvest_cols) +
+  labs(title = "Harvestable Peat Thickness by Hole (net of reclamation)",
+       x = "Test hole", y = "Thickness (cm)", fill = NULL) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p_thick
+ggsave(here(params$output_dir, paste0(params$project_id, "_peat_thickness.png")),
+       p_thick, width = 9, height = 5, dpi = 300)
+```
+
+## Interpolated thickness maps with boundaries
+
+```{r fig-maps, fig.height=6}
+# Read back the surfaces written in 03_transform.
+surf_path <- function(nm)
+  here(params$output_dir, paste0(params$project_id, "_thickness_", nm, ".tif"))
+
+plot_surface <- function(nm, title, contour = FALSE, show_setbacks = FALSE) {
+  r <- terra::rast(surf_path(nm))
+  r <- terra::mask(r, terra::vect(ownership))           # clip to study area
+
+  # Contour levels are derived from the raster's own pretty breaks, so the
+  # interval always matches the colour-scale legend (~0.5 m for professional,
+  # ~0.1 m for retail, etc.) without hard-coding — adapts to any future surface.
+  # The actual interval is reflected in the title.
+  if (contour) {
+    lev  <- pretty(range(terra::values(r), na.rm = TRUE))
+    lev  <- lev[lev > 0]
+    step <- if (length(lev) > 1) signif(lev[2] - lev[1], 3) else NA
+    title <- paste0(title, " - ", step, " m contours")
+  }
+
+  # Optional Esri World Imagery backdrop (licensed for reports with attribution).
+  if (isTRUE(params$basemap) && requireNamespace("maptiles", quietly = TRUE)) {
+    bm <- maptiles::get_tiles(terra::ext(r), provider = "Esri.WorldImagery",
+                              crop = TRUE, project = TRUE)
+    terra::plotRGB(bm); terra::plot(r, alpha = 0.6, add = TRUE)
+  } else {
+    terra::plot(r, main = title, xlab = "Easting (m)", ylab = "Northing (m)",
+                colNA = "grey85",                       # area outside the study boundary
+                plg = list(title = "Peat Depth (m)", title.cex = 0.8))
+  }
+  terra::plot(terra::vect(ownership), border = "grey20", lwd = 1, add = TRUE)
+  terra::plot(terra::vect(approved),  border = "red",    lwd = 2, add = TRUE)
+
+  # Setback/exclusion ZONES (setbacks map set only): the buffered areas actually
+  # removed from harvestable volume, filled semi-transparent and coloured by the
+  # layer they belong to. Drawn BEFORE the contours so the depth contours stay
+  # crisp on top of the zone fills.
+  if (show_setbacks && !is.null(exclusion_zones)) {
+    for (i in seq_len(nrow(exclusion_zones))) {
+      col_i <- zone_cols[[exclusion_zones$key[i]]]
+      terra::plot(terra::vect(exclusion_zones[i, ]),
+                  col = adjustcolor(col_i, 0.40), border = col_i, lwd = 1, add = TRUE)
+    }
+  }
+
+  if (contour) {
+    # White lines and labels read well across the viridis range (low dark to high
+    # bright); only the brightest yellow caps are marginal, and the haloed
+    # plot_id point labels remain the primary reference markers.
+    terra::contour(r, add = TRUE, levels = lev, col = "white",
+                   lwd = 0.8, labcex = 0.7, drawlabels = TRUE)
+  }
+
+  # Waterbody and road overlays, drawn beneath the test-hole markers. These are
+  # the features themselves; the harvestable-volume exclusions buffer them
+  # (45 m waterbodies, 12 m roads) in 03_transform.
+  if (!is.null(water_poly_v))
+    terra::plot(water_poly_v, col = adjustcolor("#4292c6", 0.55),
+                border = "#08519c", lwd = 1, add = TRUE)
+  if (!is.null(water_line_v)) terra::lines(water_line_v, col = "#08519c", lwd = 1.6)
+  if (!is.null(roads_v))      terra::lines(roads_v,      col = "#543005", lwd = 2)
+
+  # Test holes, labelled with plot_id so the map ties back to the profile chart.
+  terra::plot(pts_v, add = TRUE, col = "black", pch = 21, bg = "white", cex = 1.1)
+  terra::text(pts_v, labels = "plot_id", pos = 3, cex = 0.55,
+              halo = TRUE, hc = "white", hw = 0.2)
+
+  # Legend (the red / grey outlines plus any overlays). Use terra::add_legend,
+  # which targets the map panel — base legend() does not survive terra's
+  # colour-bar layout and renders into the wrong region. Built dynamically so it
+  # only lists overlays that were actually supplied.
+  leg <- data.frame(
+    lab = c("Reno Exploration Lands", "Tactful Developments Ltd. Boundary"),
+    col = c("red", "grey20"), lwd = c(2, 1), lty = c(1, 1))
+  if (!is.null(roads_v))
+    leg <- rbind(leg, data.frame(lab = "Roads", col = "#543005", lwd = 2, lty = 1))
+  if (!is.null(water_poly_v) || !is.null(water_line_v))
+    leg <- rbind(leg, data.frame(lab = "Waterbodies", col = "#08519c", lwd = 2, lty = 1))
+  if (show_setbacks && !is.null(exclusion_zones))
+    leg <- rbind(leg, data.frame(lab = exclusion_zones$type,
+                                 col = zone_cols[exclusion_zones$key], lwd = 6, lty = 1))
+  terra::add_legend("bottomleft", legend = leg$lab, col = leg$col,
+    lwd = leg$lwd, lty = leg$lty, bg = "white", box.col = "grey70", cex = 0.7)
+}
+
+save_map <- function(nm, title, suffix = "", contour = FALSE, show_setbacks = FALSE) {
+  png(here(params$output_dir,
+           paste0(params$project_id, "_map_", nm, suffix, ".png")),
+      width = 1800, height = 1500, res = 200)
+  plot_surface(nm, title, contour = contour, show_setbacks = show_setbacks)
+  dev.off()
+}
+
+# Plain thickness maps (now with Easting/Northing axes and a legend title)
+save_map("professional", "Professional peat thickness (m)")
+save_map("retail",       "Retail peat thickness (m)")
+
+# Second set: the same surfaces with contour lines (interval auto-set per surface)
+save_map("professional", "Professional peat thickness (m)",
+         suffix = "_contour", contour = TRUE)
+save_map("retail",       "Retail peat thickness (m)",
+         suffix = "_contour", contour = TRUE)
+
+# Third set: setback / exclusion zones overlaid, coloured by layer, WITH peat
+# depth contours, for direct comparison against the plain maps above.
+save_map("professional", "Professional peat thickness with setbacks (m)",
+         suffix = "_setbacks", show_setbacks = TRUE, contour = TRUE)
+save_map("retail",       "Retail peat thickness with setbacks (m)",
+         suffix = "_setbacks", show_setbacks = TRUE, contour = TRUE)
+
+# Show inline as well
+plot_surface("professional", "Professional peat thickness (m)")
+plot_surface("retail",       "Retail peat thickness (m)")
+plot_surface("professional", "Professional peat thickness with setbacks (m)",
+             show_setbacks = TRUE, contour = TRUE)
+plot_surface("retail",       "Retail peat thickness with setbacks (m)",
+             show_setbacks = TRUE, contour = TRUE)
+plot_surface("professional", "Professional peat thickness (m)", contour = TRUE)
+plot_surface("retail",       "Retail peat thickness (m)", contour = TRUE)
+```
